@@ -6,7 +6,10 @@ import net.sourceforge.tess4j.TesseractException;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.math.BigDecimal;
@@ -18,16 +21,61 @@ import java.util.regex.Pattern;
 @Service
 public class OcrService {
 
+    @Autowired
+    private AiValidationService aiValidationService;
+
     public ExtractedData processDocuments(File claimForm, File combinedDoc) {
         ExtractedData data = new ExtractedData();
         
         String claimFormText = extractText(claimForm);
         String combinedDocText = extractText(combinedDoc);
 
-        parseClaimForm(claimFormText, data);
-        parseCombinedDoc(combinedDocText, data);
+        String combinedText = "--- CLAIM FORM ---\n" + claimFormText + "\n--- COMBINED DOC ---\n" + combinedDocText;
+        String jsonResponse = aiValidationService.extractStructuredData(combinedText);
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(jsonResponse);
+            
+            data.setPolicyNumber(getTextNode(root, "policyNumber"));
+            data.setCustomerName(getTextNode(root, "customerName"));
+            data.setCarrierName(getTextNode(root, "carrierName"));
+            data.setPolicyName(getTextNode(root, "policyName"));
+            
+            data.setClaimFormPatientName(getTextNode(root, "patientName"));
+            data.setClaimFormHospitalName(getTextNode(root, "hospitalName"));
+            data.setClaimFormAdmissionDate(parseDate(getTextNode(root, "admissionDate")));
+            data.setClaimFormDischargeDate(parseDate(getTextNode(root, "dischargeDate")));
+            
+            String amtStr = getTextNode(root, "claimedAmount");
+            if (amtStr != null && !amtStr.equals("NONE")) {
+                try {
+                    data.setClaimedAmount(new BigDecimal(amtStr));
+                } catch (Exception e) {}
+            }
+            
+            data.setClaimType(getTextNode(root, "claimType"));
+            
+            // Populate discharge/bill fields with the same info for now
+            data.setDsPatientName(data.getClaimFormPatientName());
+            data.setDsHospitalName(data.getClaimFormHospitalName());
+            data.setDsAdmissionDate(data.getClaimFormAdmissionDate());
+            data.setDsDischargeDate(data.getClaimFormDischargeDate());
+            
+        } catch (Exception e) {
+            System.err.println("Error parsing Gemini JSON: " + e.getMessage());
+            throw new RuntimeException("Failed to parse structured data from Gemini API: " + e.getMessage(), e);
+        }
 
         return data;
+    }
+
+    private String getTextNode(JsonNode node, String field) {
+        if (node.has(field) && !node.get(field).isNull()) {
+            String val = node.get(field).asText().trim();
+            return val.equals("NONE") ? null : val;
+        }
+        return null;
     }
 
     private String extractText(File file) {
@@ -54,7 +102,7 @@ public class OcrService {
             }
         } catch (Exception e) {
             System.err.println("Error extracting text: " + e.getMessage());
-            text.append(generateMockTextForDemo());
+            throw new RuntimeException("Failed to extract text from document: " + e.getMessage(), e);
         }
         return text.toString();
     }
@@ -90,27 +138,12 @@ public class OcrService {
             }
         } catch (Throwable e) {
             System.err.println("Tesseract Failed: " + e.getMessage());
-            return generateMockTextForDemo();
+            throw new RuntimeException("OCR extraction failed", e);
         }
         return "";
     }
 
-    private String generateMockTextForDemo() {
-        return "POLICY NO: POL-12345\n" +
-               "CUSTOMER: John Customer\n" +
-               "CARRIER: TPA Health Inc\n" +
-               "POLICY NAME: Gold Shield\n" +
-               "PATIENT: John Customer\n" +
-               "HOSPITAL: City General\n" +
-               "ADMISSION: 2023-10-01\n" +
-               "DISCHARGE: 2023-10-05\n" +
-               "CLAIMED AMOUNT: 45000\n" +
-               "TYPE: Cashless\n" +
-               "DIAGNOSIS: Viral Fever\n" +
-               "BILL NO: B-9991\n" +
-               "BILL DATE: 2023-10-05\n" +
-               "TOTAL BILL: 45000";
-    }
+
 
     private void parseClaimForm(String text, ExtractedData data) {
         data.setPolicyNumber(extractRegex(text, "POLICY NO:\\s*(.*)"));

@@ -165,8 +165,8 @@ function ClaimDetails() {
             </Paper>
           )}
 
-          {/* AI Analysis */}
-          {claim.aiExplanation && (
+          {/* AI Analysis - Hidden from Customer */}
+          {claim.aiExplanation && auth.role !== 'ROLE_CUSTOMER' && (
             <Paper sx={{ p: 3, mb: 3, borderRadius: 3, background: 'linear-gradient(135deg, rgba(124,77,255,0.05), rgba(66,165,245,0.05))', border: '1px solid rgba(124,77,255,0.2)' }}>
               <Typography variant="h6" fontWeight={700} color="secondary.main" gutterBottom>🤖 AI Validation Report</Typography>
               <Divider sx={{ mb: 2, borderColor: 'rgba(124,77,255,0.2)' }} />
@@ -174,8 +174,8 @@ function ClaimDetails() {
             </Paper>
           )}
 
-          {/* Rule Results */}
-          {claim.ruleResults && claim.ruleResults.length > 0 && (
+          {/* Rule Results - Hidden from Customer */}
+          {claim.ruleResults && claim.ruleResults.length > 0 && auth.role !== 'ROLE_CUSTOMER' && (
             <Paper sx={{ p: 3, mb: 3, borderRadius: 3, boxShadow: '0 4px 14px rgba(0,0,0,0.05)' }}>
               <Typography variant="h6" fontWeight={700} gutterBottom>Rule Engine Validation Results</Typography>
               <Divider sx={{ mb: 2 }} />

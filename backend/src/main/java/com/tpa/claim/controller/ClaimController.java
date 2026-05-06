@@ -9,6 +9,8 @@ import com.tpa.claim.service.PdfExportService;
 import com.tpa.claim.service.PolicyService;
 import com.tpa.claim.service.TimelineService;
 import com.tpa.claim.repository.ClaimRepository;
+import com.tpa.claim.dto.*;
+import com.tpa.claim.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -51,7 +53,7 @@ public class ClaimController {
     private TimelineService timelineService;
 
     @Autowired
-    private OcrService ocrService;
+    private ClaimMapper claimMapper;
 
     @Value("${upload.dir}")
     private String uploadDir;
@@ -144,9 +146,12 @@ public class ClaimController {
     // Customer views their claims
     @GetMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<List<Claim>> getMyClaims() {
+    public ResponseEntity<List<CustomerClaimResponse>> getMyClaims() {
         User customer = getCurrentUser();
-        return ResponseEntity.ok(claimRepository.findByCustomerId(customer.getId()));
+        List<Claim> claims = claimRepository.findByCustomerId(customer.getId());
+        return ResponseEntity.ok(claims.stream()
+                .map(claimMapper::toCustomerResponse)
+                .collect(java.util.stream.Collectors.toList()));
     }
 
     // Any authenticated user views a specific claim
@@ -154,7 +159,21 @@ public class ClaimController {
     public ResponseEntity<?> getClaim(@PathVariable String id) {
         Claim claim = claimRepository.findById(id).orElse(null);
         if (claim == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(claim);
+        
+        UserDetailsImpl userDetails = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        boolean isCustomer = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
+        
+        if (isCustomer) {
+            // Verify it's their own claim
+            if (!claim.getCustomer().getId().equals(userDetails.getId())) {
+                return ResponseEntity.status(403).body("Access denied");
+            }
+            return ResponseEntity.ok(claimMapper.toCustomerResponse(claim));
+        } else {
+            // FMG or CARRIER
+            return ResponseEntity.ok(claimMapper.toFMGResponse(claim));
+        }
     }
 
     // Get claim timeline

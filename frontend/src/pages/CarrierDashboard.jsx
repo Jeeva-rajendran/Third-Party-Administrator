@@ -34,13 +34,20 @@ function CarrierDashboard() {
 
   const fetchAll = async () => {
     try {
-      const [claimRes, polRes] = await Promise.all([
-        axios.get(`${API}/carrier/claims`, { headers }),
-        axios.get(`${API}/policies`, { headers }),
-      ]);
+      const claimRes = await axios.get(`${API}/carrier/claims`, { headers });
       setClaims(claimRes.data);
+    } catch (err) { 
+      console.error("Error fetching claims:", err);
+      setError("Failed to fetch claims data.");
+    }
+    
+    try {
+      const polRes = await axios.get(`${API}/policies`, { headers });
       setPolicies(polRes.data);
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error("Error fetching policies:", err);
+      setError("Failed to fetch policies data.");
+    }
   };
 
   const createPolicy = async () => {
@@ -53,6 +60,7 @@ function CarrierDashboard() {
         setSuccess('Policy created successfully!');
       }
       setPolicyDialog(false);
+      setTab('policies');
       fetchAll();
     } catch (err) { setError(err.response?.data?.error || 'Failed to save policy'); }
   };
@@ -259,6 +267,13 @@ function CarrierDashboard() {
               </Card>
             </Grid>
           ))}
+          {policies.length === 0 && (
+            <Grid item xs={12}>
+              <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(0,0,0,0.02)' }}>
+                <Typography color="text.secondary">No policies created yet. Click 'Create Policy' to get started.</Typography>
+              </Paper>
+            </Grid>
+          )}
         </Grid>
       )}
 

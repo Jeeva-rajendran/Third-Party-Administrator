@@ -2,9 +2,83 @@ package com.tpa.claim.service;
 
 import com.tpa.claim.model.ExtractedData;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class AiValidationService {
+
+    @Value("${gemini.api.key:}")
+    private String geminiApiKey;
+
+    public String extractStructuredData(String rawText) {
+        if (geminiApiKey == null || geminiApiKey.isEmpty()) {
+            throw new RuntimeException("Gemini API Key is missing. Cannot perform data extraction.");
+        }
+
+        int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                RestTemplate restTemplate = new RestTemplate();
+                String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey;
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+
+                String prompt = "Extract the following fields from the text and return ONLY a JSON object. " +
+                        "Fields: policyNumber, customerName, carrierName, policyName, patientName, hospitalName, admissionDate (YYYY-MM-DD), dischargeDate (YYYY-MM-DD), claimedAmount (number only), claimType. " +
+                        "If any field is missing, set its value to \"NONE\".\n\nText:\n" + rawText;
+
+                ObjectMapper mapper = new ObjectMapper();
+                
+                // Construct JSON request body safely
+                com.fasterxml.jackson.databind.node.ObjectNode requestBodyNode = mapper.createObjectNode();
+                
+                // Set system instruction for strict JSON
+                com.fasterxml.jackson.databind.node.ObjectNode generationConfig = requestBodyNode.putObject("generationConfig");
+                generationConfig.put("responseMimeType", "application/json");
+
+                com.fasterxml.jackson.databind.node.ArrayNode contentsArray = requestBodyNode.putArray("contents");
+                com.fasterxml.jackson.databind.node.ObjectNode contentItem = contentsArray.addObject();
+                com.fasterxml.jackson.databind.node.ArrayNode partsArray = contentItem.putArray("parts");
+                com.fasterxml.jackson.databind.node.ObjectNode textItem = partsArray.addObject();
+                textItem.put("text", prompt);
+                
+                String requestBody = mapper.writeValueAsString(requestBodyNode);
+
+                HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
+                ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+
+                JsonNode root = mapper.readTree(response.getBody());
+                String extractedJsonText = root.path("candidates").get(0)
+                        .path("content").path("parts").get(0)
+                        .path("text").asText();
+
+                // Clean up possible markdown backticks
+                extractedJsonText = extractedJsonText.replaceAll("```json", "").replaceAll("```", "").trim();
+                System.out.println("Gemini API extraction succeeded on attempt " + attempt);
+                return extractedJsonText;
+            } catch (Exception e) {
+                String msg = e.getMessage();
+                System.err.println("Gemini API error (attempt " + attempt + "/" + maxRetries + "): " + msg);
+                
+                // If rate-limited and we have retries left, wait and retry
+                if (msg != null && msg.contains("429") && attempt < maxRetries) {
+                    System.out.println("Rate limited. Waiting 60 seconds before retry...");
+                    try { Thread.sleep(60000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                } else if (attempt == maxRetries) {
+                    throw new RuntimeException("Failed to extract data using Gemini API after " + maxRetries + " attempts: " + msg);
+                }
+            }
+        }
+        return "{}";
+    }
 
     /**
      * Analyzes extracted claim data and returns an AI-generated explanation.

@@ -14,6 +14,9 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import com.tpa.claim.dto.FMGClaimResponse;
+import com.tpa.claim.service.ClaimMapper;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -28,13 +31,19 @@ public class CarrierController {
     private ClaimRepository claimRepository;
 
     @Autowired
+    private ClaimMapper claimMapper;
+
+    @Autowired
     private UserRepository userRepository;
 
     // View FMG-approved claims + history of carrier decisions
     @GetMapping("/claims")
-    public ResponseEntity<List<Claim>> getCarrierClaims() {
-        return ResponseEntity.ok(claimRepository.findByStatusIn(
-                Arrays.asList("FMG_APPROVED", "CARRIER_APPROVED", "CARRIER_REJECTED", "COMPLETED")));
+    public ResponseEntity<List<FMGClaimResponse>> getCarrierClaims() {
+        List<Claim> claims = claimRepository.findByStatusIn(
+                Arrays.asList("FMG_APPROVED", "CARRIER_APPROVED", "CARRIER_REJECTED", "COMPLETED"));
+        return ResponseEntity.ok(claims.stream()
+                .map(claimMapper::toFMGResponse)
+                .collect(Collectors.toList()));
     }
 
     // Approve payment → auto-completes
@@ -45,7 +54,7 @@ public class CarrierController {
             BigDecimal settlementAmount = new BigDecimal(body.getOrDefault("settlementAmount", "0"));
             String remarks = body.get("remarks");
             Claim claim = claimService.carrierApproveClaim(id, carrier, settlementAmount, remarks);
-            return ResponseEntity.ok(claim);
+            return ResponseEntity.ok(claimMapper.toFMGResponse(claim));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -58,7 +67,7 @@ public class CarrierController {
             User carrier = getCurrentUser();
             String remarks = body != null ? body.get("remarks") : null;
             Claim claim = claimService.carrierRejectClaim(id, carrier, remarks);
-            return ResponseEntity.ok(claim);
+            return ResponseEntity.ok(claimMapper.toFMGResponse(claim));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
