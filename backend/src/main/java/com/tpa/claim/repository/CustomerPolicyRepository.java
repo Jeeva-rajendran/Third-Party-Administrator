@@ -8,4 +8,5 @@ public interface CustomerPolicyRepository extends JpaRepository<CustomerPolicy, 
     List<CustomerPolicy> findByCustomerId(Long customerId);
     List<CustomerPolicy> findByStatus(String status);
     List<CustomerPolicy> findByCustomerIdAndStatus(Long customerId, String status);
+    boolean existsByPolicyId(Long policyId);
 }

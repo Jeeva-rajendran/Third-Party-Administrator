@@ -31,7 +31,7 @@ public class PolicyService {
         return policyRepository.findById(id).orElse(null);
     }
 
-    // Customer purchases a policy
+    // Customer purchases a policy — directly ACTIVE (no Client approval needed)
     public CustomerPolicy purchasePolicy(Long policyId, User customer) {
         Policy policy = policyRepository.findById(policyId)
                 .orElseThrow(() -> new IllegalArgumentException("Policy not found"));
@@ -40,35 +40,7 @@ public class PolicyService {
         cp.setCustomer(customer);
         cp.setPolicy(policy);
         cp.setPolicyNumber("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
-        cp.setStatus("PENDING");
-        return customerPolicyRepository.save(cp);
-    }
-
-    // Client approves a policy purchase
-    public CustomerPolicy approvePolicy(Long customerPolicyId, User client, String remarks) {
-        CustomerPolicy cp = customerPolicyRepository.findById(customerPolicyId)
-                .orElseThrow(() -> new IllegalArgumentException("Customer policy not found"));
-        if (!"PENDING".equals(cp.getStatus())) {
-            throw new IllegalStateException("Policy is not in PENDING status");
-        }
-        cp.setStatus("ACTIVE");
-        cp.setApprovedBy(client);
-        cp.setDecisionDate(java.time.LocalDateTime.now());
-        cp.setRemarks(remarks);
-        return customerPolicyRepository.save(cp);
-    }
-
-    // Client rejects a policy purchase
-    public CustomerPolicy rejectPolicy(Long customerPolicyId, User client, String remarks) {
-        CustomerPolicy cp = customerPolicyRepository.findById(customerPolicyId)
-                .orElseThrow(() -> new IllegalArgumentException("Customer policy not found"));
-        if (!"PENDING".equals(cp.getStatus())) {
-            throw new IllegalStateException("Policy is not in PENDING status");
-        }
-        cp.setStatus("REJECTED");
-        cp.setApprovedBy(client);
-        cp.setDecisionDate(java.time.LocalDateTime.now());
-        cp.setRemarks(remarks);
+        cp.setStatus("ACTIVE"); // Direct activation — no Client approval required
         return customerPolicyRepository.save(cp);
     }
 
@@ -82,5 +54,33 @@ public class PolicyService {
 
     public List<CustomerPolicy> getActiveCustomerPolicies(Long customerId) {
         return customerPolicyRepository.findByCustomerIdAndStatus(customerId, "ACTIVE");
+    }
+
+    // Update existing policy
+    public Policy updatePolicy(Long id, Policy updatedPolicy) {
+        Policy existing = policyRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Policy not found"));
+        
+        existing.setPolicyName(updatedPolicy.getPolicyName());
+        existing.setPolicyType(updatedPolicy.getPolicyType());
+        existing.setCoverageAmount(updatedPolicy.getCoverageAmount());
+        existing.setPremium(updatedPolicy.getPremium());
+        existing.setValidFrom(updatedPolicy.getValidFrom());
+        existing.setValidTo(updatedPolicy.getValidTo());
+        existing.setDescription(updatedPolicy.getDescription());
+        
+        return policyRepository.save(existing);
+    }
+
+    // Delete policy
+    public void deletePolicy(Long id) {
+        if (!policyRepository.existsById(id)) {
+            throw new IllegalArgumentException("Policy not found");
+        }
+        // Check if any customer has purchased this policy before deleting
+        if (customerPolicyRepository.existsByPolicyId(id)) {
+            throw new IllegalStateException("Cannot delete policy that has active customer subscriptions");
+        }
+        policyRepository.deleteById(id);
     }
 }

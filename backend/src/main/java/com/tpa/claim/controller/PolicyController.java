@@ -49,7 +49,7 @@ public class PolicyController {
         return ResponseEntity.ok(policy);
     }
 
-    // Customer purchases a policy
+    // Customer purchases a policy — directly ACTIVE
     @PostMapping("/{id}/purchase")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<?> purchasePolicy(@PathVariable Long id) {
@@ -70,36 +70,25 @@ public class PolicyController {
         return ResponseEntity.ok(policyService.getCustomerPolicies(customer.getId()));
     }
 
-    // Client views pending policy purchases
-    @GetMapping("/pending-purchases")
-    @PreAuthorize("hasRole('CLIENT')")
-    public ResponseEntity<List<CustomerPolicy>> getPendingPurchases() {
-        return ResponseEntity.ok(policyService.getCustomerPoliciesByStatus("PENDING"));
-    }
-
-    // Client approves policy purchase
-    @PutMapping("/customer-policies/{id}/approve")
-    @PreAuthorize("hasRole('CLIENT')")
-    public ResponseEntity<?> approvePolicy(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+    // Update policy
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('CARRIER')")
+    public ResponseEntity<?> updatePolicy(@PathVariable Long id, @RequestBody Policy policy) {
         try {
-            User client = getCurrentUser();
-            String remarks = body != null ? body.get("remarks") : null;
-            CustomerPolicy cp = policyService.approvePolicy(id, client, remarks);
-            return ResponseEntity.ok(cp);
+            Policy updated = policyService.updatePolicy(id, policy);
+            return ResponseEntity.ok(updated);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // Client rejects policy purchase
-    @PutMapping("/customer-policies/{id}/reject")
-    @PreAuthorize("hasRole('CLIENT')")
-    public ResponseEntity<?> rejectPolicy(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+    // Delete policy
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('CARRIER')")
+    public ResponseEntity<?> deletePolicy(@PathVariable Long id) {
         try {
-            User client = getCurrentUser();
-            String remarks = body != null ? body.get("remarks") : null;
-            CustomerPolicy cp = policyService.rejectPolicy(id, client, remarks);
-            return ResponseEntity.ok(cp);
+            policyService.deletePolicy(id);
+            return ResponseEntity.ok(Map.of("message", "Policy deleted successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

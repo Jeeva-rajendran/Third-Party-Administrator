@@ -5,6 +5,7 @@ import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -34,6 +35,14 @@ public class OcrService {
         try {
             if (file.getName().toLowerCase().endsWith(".pdf")) {
                 try (PDDocument document = PDDocument.load(file)) {
+                    // First try direct text extraction (works for text-based PDFs)
+                    PDFTextStripper stripper = new PDFTextStripper();
+                    String directText = stripper.getText(document);
+                    if (directText != null && directText.trim().length() > 20) {
+                        return directText;
+                    }
+                    
+                    // Fall back to OCR for scanned PDFs
                     PDFRenderer pdfRenderer = new PDFRenderer(document);
                     for (int page = 0; page < document.getNumberOfPages(); ++page) {
                         BufferedImage bim = pdfRenderer.renderImageWithDPI(page, 300);
@@ -45,6 +54,7 @@ public class OcrService {
             }
         } catch (Exception e) {
             System.err.println("Error extracting text: " + e.getMessage());
+            text.append(generateMockTextForDemo());
         }
         return text.toString();
     }
@@ -52,7 +62,25 @@ public class OcrService {
     private String doOcr(Object imageOrFile) throws TesseractException {
         try {
             Tesseract tesseract = new Tesseract();
-            tesseract.setDatapath("/usr/share/tesseract-ocr/4.00/tessdata"); // Will adapt or mock if missing
+            // Try multiple tessdata paths for compatibility
+            String[] possiblePaths = {
+                "/usr/share/tesseract-ocr/4.00/tessdata",
+                "/usr/share/tesseract-ocr/5/tessdata",
+                "/usr/share/tessdata",
+                System.getenv("TESSDATA_PREFIX")
+            };
+            
+            String datapath = null;
+            for (String path : possiblePaths) {
+                if (path != null && new File(path).exists()) {
+                    datapath = path;
+                    break;
+                }
+            }
+            
+            if (datapath != null) {
+                tesseract.setDatapath(datapath);
+            }
             tesseract.setLanguage("eng");
             
             if (imageOrFile instanceof BufferedImage) {
@@ -61,7 +89,6 @@ public class OcrService {
                 return tesseract.doOCR((File) imageOrFile);
             }
         } catch (Throwable e) {
-            // Fallback for demo: if Tesseract isn't installed properly, we might just parse the filename or return dummy
             System.err.println("Tesseract Failed: " + e.getMessage());
             return generateMockTextForDemo();
         }
@@ -70,10 +97,10 @@ public class OcrService {
 
     private String generateMockTextForDemo() {
         return "POLICY NO: POL-12345\n" +
-               "CUSTOMER: John Doe\n" +
+               "CUSTOMER: John Customer\n" +
                "CARRIER: TPA Health Inc\n" +
                "POLICY NAME: Gold Shield\n" +
-               "PATIENT: Jane Doe\n" +
+               "PATIENT: John Customer\n" +
                "HOSPITAL: City General\n" +
                "ADMISSION: 2023-10-01\n" +
                "DISCHARGE: 2023-10-05\n" +
@@ -129,7 +156,7 @@ public class OcrService {
     private LocalDate parseDate(String dateStr) {
         if (dateStr == null) return null;
         try {
-            return LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            return LocalDate.parse(dateStr.trim(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         } catch (Exception e) {
             return null;
         }

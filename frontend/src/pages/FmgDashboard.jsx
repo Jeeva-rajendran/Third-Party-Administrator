@@ -2,8 +2,7 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Paper, Chip, Alert, CircularProgress, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemIcon, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
-import { ExpandMore, CheckCircle, Error as ErrorIcon, Warning, Science } from '@mui/icons-material';
+import { Box, Typography, Button, Paper, Chip, Alert, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Grid } from '@mui/material';
 
 const API = 'http://localhost:8080/api';
 
@@ -11,12 +10,11 @@ function FmgDashboard() {
   const { auth } = useContext(AuthContext);
   const navigate = useNavigate();
   const [claims, setClaims] = useState([]);
-  const [processing, setProcessing] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState(null);
-  const [dialogType, setDialogType] = useState('');
+  const [actionDialog, setActionDialog] = useState(false);
+  const [actionType, setActionType] = useState('');
+  const [actionClaimId, setActionClaimId] = useState('');
   const [comments, setComments] = useState('');
 
   const headers = { Authorization: `Bearer ${auth.token}` };
@@ -31,119 +29,119 @@ function FmgDashboard() {
   };
 
   const processClaim = async (id) => {
-    setProcessing(id); setError('');
     try {
       await axios.post(`${API}/fmg/claims/${id}/process`, {}, { headers });
-      setSuccess('Claim processed: OCR + Rules + AI completed!');
+      setSuccess('Claim processed successfully (OCR, Rules, AI applied)');
       fetchClaims();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Processing failed');
-    } finally { setProcessing(null); }
+    } catch (err) { setError(err.response?.data?.error || 'Processing failed'); }
   };
 
-  const openDialog = (type, action) => {
-    setDialogType(type); setDialogAction(() => action); setComments(''); setDialogOpen(true);
+  const openAction = (type, claimId) => {
+    setActionType(type); setActionClaimId(claimId); setComments(''); setActionDialog(true);
   };
 
   const executeAction = async () => {
     try {
-      await dialogAction(comments);
-      setSuccess('Action completed!');
-      setDialogOpen(false);
+      const url = `${API}/fmg/claims/${actionClaimId}/${actionType}`;
+      await axios.put(url, { comments }, { headers });
+      setSuccess(`Claim ${actionType} action successful`);
+      setActionDialog(false);
       fetchClaims();
     } catch (err) { setError(err.response?.data?.error || 'Action failed'); }
   };
 
-  const statusColor = (s) => ({ CLIENT_APPROVED: 'info', FMG_PROCESSING: 'warning', MANUAL_REVIEW: 'warning', FMG_APPROVED: 'success', FMG_REJECTED: 'error' }[s] || 'default');
+  const statusColor = (s) => {
+    if (s === 'FMG_PROCESSING' || s === 'MANUAL_REVIEW') return 'warning';
+    if (s === 'SUBMITTED') return 'info';
+    return 'default';
+  };
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={600} gutterBottom>FMG / TPA Processing Dashboard</Typography>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" fontWeight={800} sx={{ background: 'linear-gradient(135deg, #1565c0, #42a5f5)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          FMG Dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary">TPA Automated Claim Processing Queue</Typography>
+      </Box>
+
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
+      <Typography variant="h6" gutterBottom>Pending Claims ({claims.length})</Typography>
       {claims.map(c => (
-        <Accordion key={c.id} sx={{ mb: 1 }}>
-          <AccordionSummary expandIcon={<ExpandMore />}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', pr: 2 }}>
-              <Box>
-                <Typography fontWeight={600}>Claim: {c.id.substring(0, 8)}...</Typography>
-                <Typography variant="caption">Customer: {c.customer?.name} | Policy: {c.customerPolicy?.policyNumber}</Typography>
-              </Box>
-              <Chip label={c.status} color={statusColor(c.status)} size="small" />
+        <Paper key={c.id} sx={{ p: 2, mb: 2, borderLeft: `4px solid ${c.status === 'SUBMITTED' ? '#2196f3' : '#ff9800'}` }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Typography fontWeight={700} sx={{ cursor: 'pointer', color: 'primary.main' }} onClick={() => navigate(`/claims/${c.id}`)}>
+                Claim ID: {c.id.substring(0, 8)}...
+              </Typography>
+              <Typography variant="body2">Customer: {c.customer?.name} | Policy: {c.customerPolicy?.policyNumber}</Typography>
+              <Typography variant="caption" color="text.secondary">Submitted: {new Date(c.createdAt).toLocaleString()}</Typography>
             </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            {c.status === 'CLIENT_APPROVED' && (
-              <Button variant="contained" startIcon={processing === c.id ? <CircularProgress size={18} /> : <Science />}
-                onClick={() => processClaim(c.id)} disabled={!!processing} sx={{ mb: 2 }}>
-                {processing === c.id ? 'Processing...' : 'Run OCR + Rules + AI'}
-              </Button>
-            )}
+            
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Chip label={c.status} color={statusColor(c.status)} size="small" sx={{ fontWeight: 600 }} />
+              
+              {c.status === 'SUBMITTED' && (
+                <Button variant="contained" size="small" onClick={() => processClaim(c.id)} sx={{ background: 'linear-gradient(135deg, #1565c0, #1976d2)' }}>
+                  Start Auto-Processing
+                </Button>
+              )}
+              
+              {(c.status === 'FMG_PROCESSING' || c.status === 'MANUAL_REVIEW') && (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button variant="contained" color="success" size="small" onClick={() => openAction('approve', c.id)}>Approve</Button>
+                  {c.status !== 'MANUAL_REVIEW' && (
+                    <Button variant="outlined" color="warning" size="small" onClick={() => openAction('manual-review', c.id)}>Flag Review</Button>
+                  )}
+                  <Button variant="outlined" color="error" size="small" onClick={() => openAction('reject', c.id)}>Reject</Button>
+                </Box>
+              )}
+            </Box>
+          </Box>
 
-            {c.extractedData && (
-              <Paper sx={{ p: 2, mb: 2, bgcolor: 'rgba(0,0,0,0.02)' }}>
-                <Typography variant="subtitle2" fontWeight={600}>Extracted Data (OCR)</Typography>
-                <Typography variant="body2">Policy: {c.extractedData.policyNumber} | Patient: {c.extractedData.claimFormPatientName}</Typography>
-                <Typography variant="body2">Hospital: {c.extractedData.claimFormHospitalName} | Amount: ₹{c.extractedData.claimedAmount}</Typography>
-                <Typography variant="body2">Bill: ₹{c.extractedData.totalBillAmount} | Diagnosis: {c.extractedData.diagnosis}</Typography>
-              </Paper>
-            )}
-
-            {c.ruleResults && c.ruleResults.length > 0 && (
-              <Paper sx={{ p: 2, mb: 2, bgcolor: 'rgba(0,0,0,0.02)' }}>
-                <Typography variant="subtitle2" fontWeight={600}>Rule Engine Results</Typography>
-                <List dense>
-                  {c.ruleResults.map(r => (
-                    <ListItem key={r.id}>
-                      <ListItemIcon sx={{ minWidth: 32 }}>
-                        {r.triggered ? <Warning color="warning" fontSize="small" /> : <CheckCircle color="success" fontSize="small" />}
-                      </ListItemIcon>
-                      <ListItemText primary={`[${r.ruleId}] ${r.description}`} secondary={r.triggered ? 'Triggered' : 'Passed'} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            )}
-
-            {c.aiExplanation && (
-              <Paper sx={{ p: 2, mb: 2, bgcolor: 'rgba(25,118,210,0.05)' }}>
-                <Typography variant="subtitle2" fontWeight={600}>AI Analysis</Typography>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>{c.aiExplanation}</Typography>
-              </Paper>
-            )}
-
-            {(c.status === 'FMG_PROCESSING' || c.status === 'MANUAL_REVIEW') && (
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <Button variant="contained" color="success" onClick={() => openDialog('Approve Claim', async (cmt) => {
-                  await axios.put(`${API}/fmg/claims/${c.id}/approve`, { comments: cmt }, { headers });
-                })}>Approve → Carrier</Button>
-                <Button variant="outlined" color="error" onClick={() => openDialog('Reject Claim', async (cmt) => {
-                  await axios.put(`${API}/fmg/claims/${c.id}/reject`, { comments: cmt }, { headers });
-                })}>Reject</Button>
-                {c.status === 'FMG_PROCESSING' && (
-                  <Button variant="outlined" color="warning" onClick={() => openDialog('Flag Manual Review', async (cmt) => {
-                    await axios.put(`${API}/fmg/claims/${c.id}/manual-review`, { comments: cmt }, { headers });
-                  })}>Manual Review</Button>
-                )}
-              </Box>
-            )}
-
-            <Button size="small" sx={{ mt: 1 }} onClick={() => navigate(`/claims/${c.id}`)}>View Full Details →</Button>
-          </AccordionDetails>
-        </Accordion>
+          {/* Quick OCR & AI Preview if processed */}
+          {(c.status === 'FMG_PROCESSING' || c.status === 'MANUAL_REVIEW') && c.extractedData && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="primary" gutterBottom>OCR Extraction Summary</Typography>
+                  <Typography variant="caption" display="block">Patient: {c.extractedData.claimFormPatientName}</Typography>
+                  <Typography variant="caption" display="block">Claimed Amount: ₹{c.extractedData.claimedAmount}</Typography>
+                  <Typography variant="caption" display="block">Total Bill: ₹{c.extractedData.totalBillAmount}</Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="secondary" gutterBottom>AI & Rule Status</Typography>
+                  <Typography variant="caption" display="block" color={c.ruleResults?.some(r => r.triggered) ? "error.main" : "success.main"}>
+                    Rules Triggered: {c.ruleResults?.filter(r => r.triggered).length || 0}
+                  </Typography>
+                  {c.aiExplanation && (
+                    <Typography variant="caption" display="block" sx={{ mt: 0.5, fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      AI: {c.aiExplanation}
+                    </Typography>
+                  )}
+                </Grid>
+              </Grid>
+              <Button size="small" sx={{ mt: 1 }} onClick={() => navigate(`/claims/${c.id}`)}>View Full Details</Button>
+            </Box>
+          )}
+        </Paper>
       ))}
 
-      {claims.length === 0 && <Typography color="text.secondary">No claims awaiting FMG processing.</Typography>}
+      {claims.length === 0 && <Typography color="text.secondary">No claims pending FMG action.</Typography>}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogType}</DialogTitle>
+      {/* Action Dialog */}
+      <Dialog open={actionDialog} onClose={() => setActionDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ textTransform: 'capitalize' }}>{actionType.replace('-', ' ')} Claim</DialogTitle>
         <DialogContent>
-          <TextField label="Comments" fullWidth multiline rows={3} value={comments} onChange={(e) => setComments(e.target.value)} sx={{ mt: 1 }} />
+          <TextField label="Comments/Reason" fullWidth multiline rows={3} margin="normal" value={comments} onChange={e => setComments(e.target.value)} required={actionType === 'reject'} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={executeAction}>Confirm</Button>
+          <Button onClick={() => setActionDialog(false)}>Cancel</Button>
+          <Button variant="contained" color={actionType === 'approve' ? 'success' : actionType === 'reject' ? 'error' : 'warning'} onClick={executeAction}>
+            Confirm {actionType.replace('-', ' ')}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

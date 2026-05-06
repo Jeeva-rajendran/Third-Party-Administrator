@@ -29,11 +29,11 @@ public class FmgController {
     @Autowired
     private UserRepository userRepository;
 
-    // View claims that need FMG processing
+    // View claims that need FMG processing — now includes SUBMITTED directly (no Client step)
     @GetMapping("/claims")
     public ResponseEntity<List<Claim>> getFmgClaims() {
         List<Claim> claims = claimRepository.findByStatusIn(
-                Arrays.asList("CLIENT_APPROVED", "FMG_PROCESSING", "MANUAL_REVIEW"));
+                Arrays.asList("SUBMITTED", "FMG_PROCESSING", "MANUAL_REVIEW"));
         return ResponseEntity.ok(claims);
     }
 

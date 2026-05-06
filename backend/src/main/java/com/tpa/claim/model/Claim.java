@@ -5,8 +5,6 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,8 +30,7 @@ public class Claim {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private CustomerPolicy customerPolicy;
 
-    // SUBMITTED, CLIENT_APPROVED, CLIENT_REJECTED, FMG_PROCESSING,
-    // FMG_APPROVED, FMG_REJECTED, MANUAL_REVIEW,
+    // SUBMITTED, FMG_PROCESSING, FMG_APPROVED, FMG_REJECTED, MANUAL_REVIEW,
     // CARRIER_APPROVED, CARRIER_REJECTED, COMPLETED
     @Column(nullable = false)
     private String status;
@@ -56,9 +53,8 @@ public class Claim {
     @Column(name = "ai_explanation", columnDefinition = "TEXT")
     private String aiExplanation;
 
-    // Use JSONB to store the entire OCR snapshot
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "extracted_data_snapshot", columnDefinition = "jsonb")
+    // Use JSON column for MySQL
+    @Column(name = "extracted_data_snapshot", columnDefinition = "JSON")
     private String extractedDataSnapshot;
 
     @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -69,6 +65,9 @@ public class Claim {
 
     @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RuleResult> ruleResults;
+
+    @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ClaimDecision> decisions;
 
     @PrePersist
     protected void onCreate() {

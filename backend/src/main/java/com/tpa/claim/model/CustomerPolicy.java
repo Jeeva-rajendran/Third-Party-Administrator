@@ -32,18 +32,10 @@ public class CustomerPolicy {
     private String policyNumber; // Generated unique policy number
 
     @Column(nullable = false)
-    private String status; // PENDING, ACTIVE, REJECTED
+    private String status; // ACTIVE, EXPIRED
 
     @Column(name = "purchase_date")
     private LocalDateTime purchaseDate;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approved_by")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private User approvedBy; // Client who approved
-
-    @Column(name = "decision_date")
-    private LocalDateTime decisionDate;
 
     @Column(columnDefinition = "TEXT")
     private String remarks;

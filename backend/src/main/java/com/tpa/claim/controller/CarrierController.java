@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -29,13 +30,14 @@ public class CarrierController {
     @Autowired
     private UserRepository userRepository;
 
-    // View FMG-approved claims
+    // View FMG-approved claims + history of carrier decisions
     @GetMapping("/claims")
     public ResponseEntity<List<Claim>> getCarrierClaims() {
-        return ResponseEntity.ok(claimRepository.findByStatus("FMG_APPROVED"));
+        return ResponseEntity.ok(claimRepository.findByStatusIn(
+                Arrays.asList("FMG_APPROVED", "CARRIER_APPROVED", "CARRIER_REJECTED", "COMPLETED")));
     }
 
-    // Approve payment
+    // Approve payment → auto-completes
     @PutMapping("/claims/{id}/approve")
     public ResponseEntity<?> approveClaim(@PathVariable String id, @RequestBody Map<String, String> body) {
         try {

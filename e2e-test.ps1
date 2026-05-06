@@ -19,7 +19,6 @@ Log "STEP 1: Authentication for all roles..."
 $roles = @(
     @{ user = "carrier"; pass = "carrier123" },
     @{ user = "customer"; pass = "customer123" },
-    @{ user = "client"; pass = "client123" },
     @{ user = "fmg"; pass = "fmg123" }
 )
 $tokens = @{}
@@ -43,14 +42,6 @@ foreach ($r in $roles) {
         Write-Host "[FAIL] $msg" -ForegroundColor Red
         throw $msg
     }
-}
-
-# Test unauth access
-try {
-    $null = Invoke-RestMethod -Uri "$apiUrl/client/claims" -Method Get -Headers @{ Authorization = "Bearer $($tokens['customer'])" }
-    LogFail "Unauthorized access not blocked!"
-} catch {
-    LogSuccess "Unauthorized access blocked correctly for customer trying to access client routes."
 }
 
 # STEP 2: Policy Creation (CARRIER)
@@ -77,19 +68,9 @@ Log "STEP 3: Policy Purchase (CUSTOMER)"
 try {
     $res = Invoke-RestMethod -Uri "$apiUrl/policies/$policyId/purchase" -Method Post -Headers @{ Authorization = "Bearer $($tokens['customer'])" }
     $customerPolicyId = $res.id
-    LogSuccess "Customer requested policy purchase, CustomerPolicyID: $customerPolicyId"
+    LogSuccess "Customer purchased policy, CustomerPolicyID: $customerPolicyId (Status: $($res.status))"
 } catch {
     LogFail "Policy purchase failed: $_"
-}
-
-# CLIENT verifies and approves
-Log "STEP 3b: Client Approves Policy"
-try {
-    $approveBody = @{ remarks = "Verified identity." } | ConvertTo-Json
-    $res = Invoke-RestMethod -Uri "$apiUrl/policies/customer-policies/$customerPolicyId/approve" -Method Put -Body $approveBody -ContentType "application/json" -Headers @{ Authorization = "Bearer $($tokens['client'])" }
-    LogSuccess "Client approved policy purchase."
-} catch {
-    LogFail "Client approval failed: $_"
 }
 
 # STEP 4: Claim Submission
@@ -133,34 +114,23 @@ try {
     LogFail "Claim submission failed: $_"
 }
 
-# STEP 5: Client Verification
-Log "STEP 5: Client Verification"
-try {
-    $approveClaimBody = @{ comments = "Documents look valid." } | ConvertTo-Json
-    $res = Invoke-RestMethod -Uri "$apiUrl/client/claims/$claimId/approve" -Method Put -Body $approveClaimBody -ContentType "application/json" -Headers @{ Authorization = "Bearer $($tokens['client'])" }
-    LogSuccess "Client approved claim. Status: $($res.status)"
-} catch {
-    LogFail "Client claim approval failed: $_"
-}
-
-# STEP 6: FMG Processing
-Log "STEP 6: FMG Processing"
+# STEP 5: FMG Processing
+Log "STEP 5: FMG Processing"
 try {
     $res = Invoke-RestMethod -Uri "$apiUrl/fmg/claims/$claimId/process" -Method Post -Headers @{ Authorization = "Bearer $($tokens['fmg'])" }
     LogSuccess "FMG processing (OCR + Rules + AI) completed. Status: $($res.status)"
 } catch {
-        $msg = $_
-        if ($_.Exception.Response) {
-            $stream = $_.Exception.Response.GetResponseStream()
-            $reader = New-Object System.IO.StreamReader($stream)
-            $responseBody = $reader.ReadToEnd()
-            $msg = "$msg `nResponse Body: $responseBody"
-        }
-        Write-Host "[FAIL] $msg" -ForegroundColor Red
-        throw $msg
+    $msg = $_
+    if ($_.Exception.Response) {
+        $stream = $_.Exception.Response.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($stream)
+        $responseBody = $reader.ReadToEnd()
+        $msg = "$msg `nResponse Body: $responseBody"
     }
+    LogFail "FMG Processing failed: $msg"
+}
 
-Log "STEP 6b: FMG Final Decision"
+Log "STEP 5b: FMG Final Decision"
 try {
     $approveFmgBody = @{ comments = "Verified by AI and rules." } | ConvertTo-Json
     $res = Invoke-RestMethod -Uri "$apiUrl/fmg/claims/$claimId/approve" -Method Put -Body $approveFmgBody -ContentType "application/json" -Headers @{ Authorization = "Bearer $($tokens['fmg'])" }
@@ -169,8 +139,8 @@ try {
     LogFail "FMG approval failed: $_"
 }
 
-# STEP 7: Carrier Final Decision
-Log "STEP 7: Carrier Final Decision"
+# STEP 6: Carrier Final Decision
+Log "STEP 6: Carrier Final Decision"
 try {
     $carrierBody = @{ settlementAmount = 45000; remarks = "Payment approved." } | ConvertTo-Json
     $res = Invoke-RestMethod -Uri "$apiUrl/carrier/claims/$claimId/approve" -Method Put -Body $carrierBody -ContentType "application/json" -Headers @{ Authorization = "Bearer $($tokens['carrier'])" }
@@ -179,8 +149,8 @@ try {
     LogFail "Carrier approval failed: $_"
 }
 
-# STEP 9: Timeline Validation
-Log "STEP 9: Timeline Validation"
+# STEP 7: Timeline Validation
+Log "STEP 7: Timeline Validation"
 try {
     $res = Invoke-RestMethod -Uri "$apiUrl/claims/$claimId/timeline" -Method Get -Headers @{ Authorization = "Bearer $($tokens['customer'])" }
     if ($res.Count -lt 5) {
@@ -191,8 +161,8 @@ try {
     LogFail "Timeline validation failed: $_"
 }
 
-# STEP 10: PDF Generation
-Log "STEP 10: PDF Generation"
+# STEP 8: PDF Generation
+Log "STEP 8: PDF Generation"
 try {
     $res = Invoke-RestMethod -Uri "$apiUrl/claims/$claimId/export" -Method Get -Headers @{ Authorization = "Bearer $($tokens['customer'])" } -OutFile "c:\Final-Project\test_claim_report.pdf"
     $fileInfo = Get-Item "c:\Final-Project\test_claim_report.pdf"

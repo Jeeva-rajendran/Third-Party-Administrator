@@ -63,7 +63,6 @@ public class SecurityConfig {
                 auth.requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                     .requestMatchers("/api/policies").authenticated() // All authenticated users can view policies
-                    .requestMatchers("/api/client/**").hasRole("CLIENT")
                     .requestMatchers("/api/fmg/**").hasRole("FMG")
                     .requestMatchers("/api/carrier/**").hasRole("CARRIER")
                     .anyRequest().authenticated()
