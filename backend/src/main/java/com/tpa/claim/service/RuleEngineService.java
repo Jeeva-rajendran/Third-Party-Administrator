@@ -3,6 +3,7 @@ package com.tpa.claim.service;
 import com.tpa.claim.model.Claim;
 import com.tpa.claim.model.ExtractedData;
 import com.tpa.claim.model.RuleResult;
+import com.tpa.claim.repository.ClaimRepository;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,6 +12,12 @@ import java.util.List;
 
 @Service
 public class RuleEngineService {
+
+    private final ClaimRepository claimRepository;
+
+    public RuleEngineService(ClaimRepository claimRepository) {
+        this.claimRepository = claimRepository;
+    }
 
     public void evaluateRules(Claim claim) {
         List<RuleResult> results = new ArrayList<>();
@@ -28,15 +35,21 @@ public class RuleEngineService {
         results.add(new RuleResult(null, claim, "R2", r2, "Combined document missing"));
         if (r2) rejected = true;
 
-        // R3: Policy inactive (check against customer policy validity)
+        // R3: Policy inactive on admission date
         boolean r3 = false;
         if (claim.getCustomerPolicy() != null && claim.getCustomerPolicy().getPolicy() != null) {
+            LocalDate admissionDate = data.getClaimFormAdmissionDate() != null
+                    ? data.getClaimFormAdmissionDate()
+                    : data.getDsAdmissionDate();
+            LocalDate validFrom = claim.getCustomerPolicy().getPolicy().getValidFrom();
             LocalDate validTo = claim.getCustomerPolicy().getPolicy().getValidTo();
-            if (validTo != null && validTo.isBefore(LocalDate.now())) {
+            if (admissionDate == null ||
+                    (validFrom != null && admissionDate.isBefore(validFrom)) ||
+                    (validTo != null && admissionDate.isAfter(validTo))) {
                 r3 = true;
             }
         }
-        results.add(new RuleResult(null, claim, "R3", r3, "Policy expired or inactive"));
+        results.add(new RuleResult(null, claim, "R3", r3, "Policy inactive on admission date"));
         if (r3) rejected = true;
 
         // R4: Policy number missing
@@ -80,9 +93,9 @@ public class RuleEngineService {
         results.add(new RuleResult(null, claim, "R9", r9, "Claimed amount greater than 50000"));
         if (r9) manualReview = true;
 
-        // R10: Possible duplicate claim
-        boolean r10 = data.getBillNumber() != null && data.getBillNumber().equalsIgnoreCase("DUPLICATE");
-        results.add(new RuleResult(null, claim, "R10", r10, "Possible duplicate claim"));
+        // R10: Possible duplicate claim (same policy + patient + hospital + admission date)
+        boolean r10 = isPotentialDuplicate(claim, data);
+        results.add(new RuleResult(null, claim, "R10", r10, "Possible duplicate claim for same policy, patient, hospital, and admission date"));
         if (r10) manualReview = true;
 
         if (claim.getRuleResults() == null) {
@@ -94,14 +107,67 @@ public class RuleEngineService {
         // Set status based on rule evaluation
         if (rejected) {
             claim.setStatus("FMG_REJECTED");
-            claim.setDecisionReason("Rejected by rule engine: critical document or policy validation failed");
+            claim.setApprovalChancePercentage(0);
+            claim.setDecisionReason("Rejected by FMG validation: one or more rejection rules failed");
         } else if (manualReview) {
             claim.setStatus("MANUAL_REVIEW");
-            claim.setDecisionReason("Flagged for manual review: inconsistencies detected by rule engine");
+            int approvalChance = calculateApprovalChance(results);
+            claim.setApprovalChancePercentage(approvalChance);
+            claim.setDecisionReason("Needs carrier manual review: one or more review rules were triggered. Estimated approval chance: " + approvalChance + "%");
         } else {
-            claim.setStatus("FMG_PROCESSING");
-            claim.setDecisionReason("All rules passed successfully");
+            claim.setStatus("READY_FOR_CARRIER");
+            claim.setApprovalChancePercentage(92);
+            claim.setDecisionReason("All FMG validation rules passed. Forwarded to carrier for final decision. Estimated approval chance: 92%");
         }
+    }
+
+    private int calculateApprovalChance(List<RuleResult> results) {
+        int score = 82;
+        for (RuleResult result : results) {
+            if (!result.isTriggered()) {
+                continue;
+            }
+            switch (result.getRuleId()) {
+                case "R4":
+                    score -= 14;
+                    break;
+                case "R5":
+                case "R6":
+                    score -= 12;
+                    break;
+                case "R7":
+                    score -= 10;
+                    break;
+                case "R8":
+                    score -= 16;
+                    break;
+                case "R9":
+                    score -= 8;
+                    break;
+                case "R10":
+                    score -= 18;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return Math.max(15, Math.min(88, score));
+    }
+
+    private boolean isPotentialDuplicate(Claim claim, ExtractedData data) {
+        if (claim.getId() == null || claim.getCustomerPolicy() == null || data == null ||
+                data.getClaimFormPatientName() == null ||
+                data.getClaimFormHospitalName() == null ||
+                data.getClaimFormAdmissionDate() == null) {
+            return false;
+        }
+        return !claimRepository.findPotentialDuplicates(
+                claim.getId(),
+                claim.getCustomerPolicy().getPolicyNumber(),
+                data.getClaimFormPatientName().trim(),
+                data.getClaimFormHospitalName().trim(),
+                data.getClaimFormAdmissionDate()
+        ).isEmpty();
     }
 
     private boolean safeEqualsIgnoreCase(String s1, String s2) {

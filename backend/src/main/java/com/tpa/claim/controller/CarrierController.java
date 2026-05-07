@@ -5,6 +5,7 @@ import com.tpa.claim.repository.ClaimRepository;
 import com.tpa.claim.repository.UserRepository;
 import com.tpa.claim.security.UserDetailsImpl;
 import com.tpa.claim.service.ClaimService;
+import com.tpa.claim.service.CustomerDirectoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,6 +16,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import com.tpa.claim.dto.CustomerDirectoryResponse;
+import com.tpa.claim.dto.CustomerDetailsResponse;
 import com.tpa.claim.dto.FMGClaimResponse;
 import com.tpa.claim.service.ClaimMapper;
 
@@ -36,14 +39,27 @@ public class CarrierController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private CustomerDirectoryService customerDirectoryService;
+
     // View FMG-approved claims + history of carrier decisions
     @GetMapping("/claims")
     public ResponseEntity<List<FMGClaimResponse>> getCarrierClaims() {
         List<Claim> claims = claimRepository.findByStatusIn(
-                Arrays.asList("FMG_APPROVED", "CARRIER_APPROVED", "CARRIER_REJECTED", "COMPLETED"));
+                Arrays.asList("READY_FOR_CARRIER", "MANUAL_REVIEW", "CARRIER_APPROVED", "CARRIER_REJECTED", "COMPLETED"));
         return ResponseEntity.ok(claims.stream()
                 .map(claimMapper::toFMGResponse)
                 .collect(Collectors.toList()));
+    }
+
+    @GetMapping("/customers")
+    public ResponseEntity<List<CustomerDirectoryResponse>> getCustomers() {
+        return ResponseEntity.ok(customerDirectoryService.getAllCustomers());
+    }
+
+    @GetMapping("/customers/{id}")
+    public ResponseEntity<CustomerDetailsResponse> getCustomerDetails(@PathVariable Long id) {
+        return ResponseEntity.ok(customerDirectoryService.getCustomerDetails(id));
     }
 
     // Approve payment → auto-completes

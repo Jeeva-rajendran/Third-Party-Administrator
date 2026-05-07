@@ -29,7 +29,8 @@ services:
       - DB_NAME=tpa_claims
       - DB_USER=root
       - DB_PASSWORD=root
-      - GEMINI_API_KEY=AIzaSyCtfZ9daIj4cZDkwqKKFdesDRT-ksdW4t4
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_ENABLED=${GEMINI_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy

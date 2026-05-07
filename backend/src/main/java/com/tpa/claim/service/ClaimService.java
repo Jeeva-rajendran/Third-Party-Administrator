@@ -107,7 +107,7 @@ public class ClaimService {
         return saved;
     }
 
-    // FMG processes claim (OCR + Rules + AI) — now accepts SUBMITTED status directly
+    // FMG validates claim using OCR, rules, and AI assistance. FMG does not approve or reject manually.
     @Transactional
     public Claim fmgProcessClaim(String claimId, User fmgUser) throws Exception {
         Claim claim = getClaimOrThrow(claimId);
@@ -140,86 +140,34 @@ public class ClaimService {
         claim.setProcessedAt(LocalDateTime.now());
         Claim saved = claimRepository.save(claim);
         timelineService.addEntry(saved, "FMG_PROCESSED", fmgUser.getUsername(), "FMG",
-                "OCR extraction, rule engine, and AI validation completed. Status: " + claim.getStatus());
+                "AI/rule validation completed. Result: " + claim.getStatus() + ". " + claim.getDecisionReason());
+        if (saved.getApprovalChancePercentage() != null) {
+            timelineService.addEntry(saved, "APPROVAL_CHANCE_ESTIMATED", fmgUser.getUsername(), "FMG",
+                    "Estimated approval chance shown to customer: " + saved.getApprovalChancePercentage() + "%");
+        }
         return saved;
     }
 
     @Transactional
     public Claim fmgApproveClaim(String claimId, User fmgUser, String comments) {
-        Claim claim = getClaimOrThrow(claimId);
-        if (!"FMG_PROCESSING".equals(claim.getStatus()) && !"MANUAL_REVIEW".equals(claim.getStatus())) {
-            throw new IllegalStateException("Claim is not in FMG_PROCESSING or MANUAL_REVIEW status");
-        }
-        claim.setStatus("FMG_APPROVED");
-
-        // Record decision
-        ClaimDecision decision = new ClaimDecision();
-        decision.setClaim(claim);
-        decision.setDecidedBy(fmgUser.getUsername());
-        decision.setRole("FMG");
-        decision.setDecision("APPROVED");
-        decision.setRemarks(comments);
-        if (claim.getDecisions() == null) claim.setDecisions(new ArrayList<>());
-        claim.getDecisions().add(decision);
-
-        Claim saved = claimRepository.save(claim);
-        timelineService.addEntry(saved, "FMG_APPROVED", fmgUser.getUsername(), "FMG",
-                comments != null ? comments : "Claim approved by FMG and forwarded to carrier");
-        return saved;
+        throw new UnsupportedOperationException("FMG cannot approve claims. FMG only performs AI/rule validation.");
     }
 
     @Transactional
     public Claim fmgRejectClaim(String claimId, User fmgUser, String comments) {
-        Claim claim = getClaimOrThrow(claimId);
-        if (!"FMG_PROCESSING".equals(claim.getStatus()) && !"MANUAL_REVIEW".equals(claim.getStatus())) {
-            throw new IllegalStateException("Claim is not in FMG_PROCESSING or MANUAL_REVIEW status");
-        }
-        claim.setStatus("FMG_REJECTED");
-        claim.setDecisionReason(comments);
-
-        // Record decision
-        ClaimDecision decision = new ClaimDecision();
-        decision.setClaim(claim);
-        decision.setDecidedBy(fmgUser.getUsername());
-        decision.setRole("FMG");
-        decision.setDecision("REJECTED");
-        decision.setRemarks(comments);
-        if (claim.getDecisions() == null) claim.setDecisions(new ArrayList<>());
-        claim.getDecisions().add(decision);
-
-        Claim saved = claimRepository.save(claim);
-        timelineService.addEntry(saved, "FMG_REJECTED", fmgUser.getUsername(), "FMG",
-                comments != null ? comments : "Claim rejected by FMG");
-        return saved;
+        throw new UnsupportedOperationException("FMG cannot manually reject claims. Rejection is decided only by validation rules or carrier final decision.");
     }
 
     @Transactional
     public Claim fmgManualReview(String claimId, User fmgUser, String comments) {
-        Claim claim = getClaimOrThrow(claimId);
-        assertStatus(claim, "FMG_PROCESSING");
-        claim.setStatus("MANUAL_REVIEW");
-
-        // Record decision
-        ClaimDecision decision = new ClaimDecision();
-        decision.setClaim(claim);
-        decision.setDecidedBy(fmgUser.getUsername());
-        decision.setRole("FMG");
-        decision.setDecision("MANUAL_REVIEW");
-        decision.setRemarks(comments);
-        if (claim.getDecisions() == null) claim.setDecisions(new ArrayList<>());
-        claim.getDecisions().add(decision);
-
-        Claim saved = claimRepository.save(claim);
-        timelineService.addEntry(saved, "MANUAL_REVIEW", fmgUser.getUsername(), "FMG",
-                comments != null ? comments : "Claim flagged for manual review");
-        return saved;
+        throw new UnsupportedOperationException("FMG cannot manually change routing. Manual review is assigned by validation rules.");
     }
 
     // Carrier final decision — APPROVE → COMPLETED
     @Transactional
     public Claim carrierApproveClaim(String claimId, User carrier, BigDecimal settlementAmount, String remarks) {
         Claim claim = getClaimOrThrow(claimId);
-        assertStatus(claim, "FMG_APPROVED");
+        assertCarrierDecisionStatus(claim);
         claim.setStatus("CARRIER_APPROVED");
         claim.setSettlementAmount(settlementAmount);
         claim.setCarrierRemarks(remarks);
@@ -250,7 +198,7 @@ public class ClaimService {
     @Transactional
     public Claim carrierRejectClaim(String claimId, User carrier, String remarks) {
         Claim claim = getClaimOrThrow(claimId);
-        assertStatus(claim, "FMG_APPROVED");
+        assertCarrierDecisionStatus(claim);
         claim.setStatus("CARRIER_REJECTED");
         claim.setCarrierRemarks(remarks);
         claim.setDecisionReason(remarks);
@@ -284,6 +232,12 @@ public class ClaimService {
     private void assertStatus(Claim claim, String expectedStatus) {
         if (!expectedStatus.equals(claim.getStatus())) {
             throw new IllegalStateException("Claim is not in " + expectedStatus + " status. Current: " + claim.getStatus());
+        }
+    }
+
+    private void assertCarrierDecisionStatus(Claim claim) {
+        if (!"READY_FOR_CARRIER".equals(claim.getStatus()) && !"MANUAL_REVIEW".equals(claim.getStatus())) {
+            throw new IllegalStateException("Claim is not ready for carrier decision. Current: " + claim.getStatus());
         }
     }
 

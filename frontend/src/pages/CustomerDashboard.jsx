@@ -2,8 +2,8 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Paper, Grid, Chip, Card, CardContent, CardActions, Alert, Divider } from '@mui/material';
-import { Send, Policy, ShoppingCart, Assignment, TrendingUp } from '@mui/icons-material';
+import { Box, Typography, Button, Paper, Grid, Chip, Card, CardContent, CardActions, Alert, LinearProgress } from '@mui/material';
+import { Send, Policy, ShoppingCart, Assignment } from '@mui/icons-material';
 
 const API = 'http://localhost:8080/api';
 
@@ -46,6 +46,7 @@ function CustomerDashboard() {
   const statusColor = (s) => ({
     SUBMITTED: 'info',
     FMG_PROCESSING: 'warning',
+    READY_FOR_CARRIER: 'primary',
     MANUAL_REVIEW: 'warning',
     FMG_APPROVED: 'primary',
     FMG_REJECTED: 'error',
@@ -58,9 +59,34 @@ function CustomerDashboard() {
     if (s === 'COMPLETED' || s === 'CARRIER_APPROVED') return '✅';
     if (s?.includes('REJECTED')) return '❌';
     if (s?.includes('REVIEW') || s?.includes('PROCESSING')) return '⏳';
+    if (s === 'READY_FOR_CARRIER') return '✔️';
     if (s === 'SUBMITTED') return '📤';
     if (s === 'FMG_APPROVED') return '✔️';
     return '📋';
+  };
+
+  const approvalChanceColor = (value) => {
+    if (value >= 75) return 'success';
+    if (value >= 45) return 'warning';
+    return 'error';
+  };
+
+  const ApprovalChance = ({ value }) => {
+    if (value === null || value === undefined) return null;
+    return (
+      <Box sx={{ mt: 1, minWidth: { xs: '100%', sm: 190 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" fontWeight={600}>Approval chance</Typography>
+          <Typography variant="caption" fontWeight={800} color={`${approvalChanceColor(value)}.main`}>{value}%</Typography>
+        </Box>
+        <LinearProgress
+          variant="determinate"
+          value={value}
+          color={approvalChanceColor(value)}
+          sx={{ height: 7, borderRadius: 1 }}
+        />
+      </Box>
+    );
   };
 
   return (
@@ -187,6 +213,7 @@ function CustomerDashboard() {
                   </Typography>
                   <Typography variant="body2" color="text.secondary">Policy: {c.customerPolicy?.policyNumber}</Typography>
                   <Typography variant="caption" color="text.secondary">Created: {new Date(c.createdAt).toLocaleString()}</Typography>
+                  <ApprovalChance value={c.approvalChancePercentage} />
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
                   <Chip label={c.status} color={statusColor(c.status)} sx={{ fontWeight: 600 }} />

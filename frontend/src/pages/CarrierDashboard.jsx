@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Paper, Chip, Alert, TextField, Grid, Card, CardContent, CardActions, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, IconButton, Divider } from '@mui/material';
+import { Box, Typography, Button, Paper, Chip, Alert, TextField, Grid, Card, CardContent, CardActions, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, IconButton, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { Add, Edit, Delete, CheckCircle, Cancel, HourglassEmpty } from '@mui/icons-material';
 
 const API = 'http://localhost:8080/api';
@@ -13,6 +13,10 @@ function CarrierDashboard() {
   const [tab, setTab] = useState('claims');
   const [claims, setClaims] = useState([]);
   const [policies, setPolicies] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerDetailsOpen, setCustomerDetailsOpen] = useState(false);
+  const [customerDetailsLoading, setCustomerDetailsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
@@ -47,6 +51,14 @@ function CarrierDashboard() {
     } catch (err) { 
       console.error("Error fetching policies:", err);
       setError("Failed to fetch policies data.");
+    }
+
+    try {
+      const customerRes = await axios.get(`${API}/carrier/customers`, { headers });
+      setCustomers(customerRes.data);
+    } catch (err) {
+      console.error("Error fetching customers:", err);
+      setError("Failed to fetch customers data.");
     }
   };
 
@@ -108,9 +120,30 @@ function CarrierDashboard() {
     } catch (err) { setError(err.response?.data?.error || 'Action failed'); }
   };
 
+  const openCustomerDetails = async (customer) => {
+    setCustomerDetailsOpen(true);
+    setSelectedCustomer(null);
+    setCustomerDetailsLoading(true);
+    try {
+      const res = await axios.get(`${API}/carrier/customers/${customer.id}`, { headers });
+      setSelectedCustomer(res.data);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch customer details.');
+      setCustomerDetailsOpen(false);
+    } finally {
+      setCustomerDetailsLoading(false);
+    }
+  };
+
+  const formatCurrency = (value) => value !== null && value !== undefined
+    ? `₹${Number(value).toLocaleString()}`
+    : 'N/A';
+
   const statusChip = (status) => {
     switch(status) {
-      case 'FMG_APPROVED': return <Chip icon={<HourglassEmpty />} label="Awaiting Carrier Decision" color="warning" size="small" />;
+      case 'READY_FOR_CARRIER': return <Chip icon={<HourglassEmpty />} label="Rules Passed - Awaiting Decision" color="info" size="small" />;
+      case 'MANUAL_REVIEW': return <Chip icon={<HourglassEmpty />} label="Manual Review Required" color="warning" size="small" />;
       case 'COMPLETED': return <Chip icon={<CheckCircle />} label="Paid / Completed" color="success" size="small" />;
       case 'CARRIER_REJECTED': return <Chip icon={<Cancel />} label="Rejected" color="error" size="small" />;
       default: return <Chip label={status} color="default" size="small" />;
@@ -118,8 +151,8 @@ function CarrierDashboard() {
   };
 
   // Split claims into pending and history
-  const pendingClaims = claims.filter(c => c.status === 'FMG_APPROVED');
-  const claimHistory = claims.filter(c => c.status !== 'FMG_APPROVED');
+  const pendingClaims = claims.filter(c => c.status === 'READY_FOR_CARRIER' || c.status === 'MANUAL_REVIEW');
+  const claimHistory = claims.filter(c => c.status !== 'READY_FOR_CARRIER' && c.status !== 'MANUAL_REVIEW');
 
   return (
     <Box>
@@ -140,6 +173,9 @@ function CarrierDashboard() {
         <Button variant={tab === 'policies' ? 'contained' : 'outlined'} onClick={() => setTab('policies')} sx={{ fontWeight: 600 }}>
           Manage Policies ({policies.length})
         </Button>
+        <Button variant={tab === 'customers' ? 'contained' : 'outlined'} onClick={() => setTab('customers')} sx={{ fontWeight: 600 }}>
+          Customers ({customers.length})
+        </Button>
         <Button variant="contained" color="success" startIcon={<Add />} onClick={openCreateDialog} sx={{ ml: 'auto', background: 'linear-gradient(135deg, #2e7d32, #43a047)' }}>
           Create Policy
         </Button>
@@ -151,7 +187,7 @@ function CarrierDashboard() {
       {/* Pending Claims */}
       {tab === 'claims' && (
         <Box>
-          <Typography variant="h6" gutterBottom fontWeight={600}>Action Required: FMG-Approved Claims</Typography>
+          <Typography variant="h6" gutterBottom fontWeight={600}>Action Required: FMG-Validated Claims</Typography>
           {pendingClaims.map(c => (
             <Paper key={c.id} sx={{ p: 3, mb: 2, borderLeft: '4px solid #ff9800', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 4 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
@@ -175,8 +211,14 @@ function CarrierDashboard() {
                   </Grid>
                   {c.decisions && c.decisions.length > 0 && (
                     <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(25,118,210,0.04)', borderRadius: 2 }}>
-                      <Typography variant="caption" fontWeight={700} color="primary">FMG Recommendation:</Typography>
-                      <Typography variant="body2" fontStyle="italic">"{c.decisions[c.decisions.length-1].remarks || 'Approved for payment'}"</Typography>
+                      <Typography variant="caption" fontWeight={700} color="primary">FMG Validation Result:</Typography>
+                      <Typography variant="body2" fontStyle="italic">"{c.decisionReason || 'Rules passed. Carrier final decision required.'}"</Typography>
+                    </Box>
+                  )}
+                  {!c.decisions?.length && c.decisionReason && (
+                    <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,152,0,0.08)', borderRadius: 2 }}>
+                      <Typography variant="caption" fontWeight={700} color="warning.main">FMG Validation Result:</Typography>
+                      <Typography variant="body2" fontStyle="italic">"{c.decisionReason}"</Typography>
                     </Box>
                   )}
                 </Box>
@@ -276,6 +318,153 @@ function CarrierDashboard() {
           )}
         </Grid>
       )}
+
+      {tab === 'customers' && (
+        <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Box sx={{ p: 3, pb: 2 }}>
+            <Typography variant="h6" fontWeight={700}>Registered Customers</Typography>
+            <Typography variant="body2" color="text.secondary">All registered customers are visible here, including active, inactive, and no-policy customers.</Typography>
+          </Box>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Customer ID</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Customer</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Username</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Total Policies</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Active</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Inactive</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Last Purchase</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Details</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {customers.map((customer) => (
+                  <TableRow key={customer.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={700} color="primary.main">
+                        {customer.customerId || 'N/A'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{customer.name}</TableCell>
+                    <TableCell>{customer.username}</TableCell>
+                    <TableCell>{customer.email || 'N/A'}</TableCell>
+                    <TableCell>{customer.totalPolicies}</TableCell>
+                    <TableCell>{customer.activePolicies}</TableCell>
+                    <TableCell>{customer.inactivePolicies}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={customer.status.replace('_', ' ')}
+                        color={customer.status === 'ACTIVE' ? 'success' : customer.status === 'INACTIVE' ? 'warning' : 'default'}
+                      />
+                    </TableCell>
+                    <TableCell>{customer.lastPurchaseDate ? new Date(customer.lastPurchaseDate).toLocaleString() : 'No policies yet'}</TableCell>
+                    <TableCell>
+                      <Button size="small" variant="outlined" onClick={() => openCustomerDetails(customer)}>Details</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {customers.length === 0 && <Typography sx={{ p: 3 }} color="text.secondary">No registered customers found.</Typography>}
+        </Paper>
+      )}
+
+      <Dialog open={customerDetailsOpen} onClose={() => setCustomerDetailsOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Customer Details {selectedCustomer?.customerId ? `- ${selectedCustomer.customerId}` : ''}
+        </DialogTitle>
+        <DialogContent dividers>
+          {customerDetailsLoading && <Typography color="text.secondary">Loading customer history...</Typography>}
+          {selectedCustomer && (
+            <Box>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} sm={6} md={3}><Typography variant="caption" color="text.secondary">Name</Typography><Typography fontWeight={700}>{selectedCustomer.name}</Typography></Grid>
+                <Grid item xs={12} sm={6} md={3}><Typography variant="caption" color="text.secondary">Username</Typography><Typography>{selectedCustomer.username}</Typography></Grid>
+                <Grid item xs={12} sm={6} md={3}><Typography variant="caption" color="text.secondary">Email</Typography><Typography>{selectedCustomer.email || 'N/A'}</Typography></Grid>
+                <Grid item xs={12} sm={6} md={3}><Typography variant="caption" color="text.secondary">Customer ID</Typography><Typography fontWeight={700} color="primary.main">{selectedCustomer.customerId}</Typography></Grid>
+              </Grid>
+
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} sm={3}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800}>{selectedCustomer.totalPolicies}</Typography><Typography variant="caption">Policies</Typography></Paper></Grid>
+                <Grid item xs={6} sm={3}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800}>{selectedCustomer.totalClaims}</Typography><Typography variant="caption">Claims</Typography></Paper></Grid>
+                <Grid item xs={6} sm={3}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800} color="success.main">{selectedCustomer.approvedClaims}</Typography><Typography variant="caption">Approved</Typography></Paper></Grid>
+                <Grid item xs={6} sm={3}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800} color="error.main">{selectedCustomer.rejectedClaims}</Typography><Typography variant="caption">Rejected</Typography></Paper></Grid>
+                <Grid item xs={6} sm={4}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800} color="warning.main">{selectedCustomer.pendingClaims}</Typography><Typography variant="caption">Pending</Typography></Paper></Grid>
+                <Grid item xs={6} sm={4}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800}>{formatCurrency(selectedCustomer.totalClaimedAmount)}</Typography><Typography variant="caption">Total Claimed</Typography></Paper></Grid>
+                <Grid item xs={12} sm={4}><Paper sx={{ p: 1.5 }}><Typography variant="h6" fontWeight={800} color="success.main">{formatCurrency(selectedCustomer.totalSettledAmount)}</Typography><Typography variant="caption">Total Settled</Typography></Paper></Grid>
+              </Grid>
+
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Policy History</Typography>
+              <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Policy #</TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Coverage</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Purchased</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedCustomer.policies.map((policy) => (
+                      <TableRow key={policy.id}>
+                        <TableCell>{policy.policyNumber}</TableCell>
+                        <TableCell>{policy.policyName || 'N/A'}</TableCell>
+                        <TableCell>{policy.policyType || 'N/A'}</TableCell>
+                        <TableCell>{formatCurrency(policy.coverageAmount)}</TableCell>
+                        <TableCell><Chip size="small" label={policy.status} color={policy.status === 'ACTIVE' ? 'success' : 'default'} /></TableCell>
+                        <TableCell>{policy.purchaseDate ? new Date(policy.purchaseDate).toLocaleString() : 'N/A'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {selectedCustomer.policies.length === 0 && <Typography sx={{ mb: 3 }} color="text.secondary">No policy history yet.</Typography>}
+
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Claim History</Typography>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Claim</TableCell>
+                      <TableCell>Policy</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Claimed</TableCell>
+                      <TableCell>Settled</TableCell>
+                      <TableCell>Approval Chance</TableCell>
+                      <TableCell>Decision</TableCell>
+                      <TableCell>Submitted</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedCustomer.claims.map((claim) => (
+                      <TableRow key={claim.id}>
+                        <TableCell>{claim.id.substring(0, 8)}...</TableCell>
+                        <TableCell>{claim.policyNumber || 'N/A'}</TableCell>
+                        <TableCell>{statusChip(claim.status)}</TableCell>
+                        <TableCell>{formatCurrency(claim.claimedAmount)}</TableCell>
+                        <TableCell>{formatCurrency(claim.settlementAmount)}</TableCell>
+                        <TableCell>{claim.approvalChancePercentage !== null && claim.approvalChancePercentage !== undefined ? `${claim.approvalChancePercentage}%` : 'N/A'}</TableCell>
+                        <TableCell>{claim.decisionReason || 'N/A'}</TableCell>
+                        <TableCell>{claim.createdAt ? new Date(claim.createdAt).toLocaleString() : 'N/A'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {selectedCustomer.claims.length === 0 && <Typography sx={{ mt: 1 }} color="text.secondary">No claim history yet.</Typography>}
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Action Dialog */}
       <Dialog open={actionDialog} onClose={() => setActionDialog(false)} maxWidth="sm" fullWidth>

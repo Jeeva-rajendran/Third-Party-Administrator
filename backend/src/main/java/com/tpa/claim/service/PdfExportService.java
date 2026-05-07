@@ -112,6 +112,8 @@ public class PdfExportService {
 
             // Decision Summary
             document.add(new Paragraph("DECISION SUMMARY", headerFont));
+            if (claim.getApprovalChancePercentage() != null)
+                document.add(new Paragraph("AI Estimated Approval Chance: " + claim.getApprovalChancePercentage() + "%", boldFont));
             if (claim.getDecisionReason() != null)
                 document.add(new Paragraph("Decision Reason: " + claim.getDecisionReason(), normalFont));
             if (claim.getSettlementAmount() != null)

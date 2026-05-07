@@ -2,8 +2,8 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Paper, Grid, Divider, Chip, Button, List, ListItem, ListItemIcon, ListItemText, Stepper, Step, StepLabel, StepContent, IconButton } from '@mui/material';
-import { Download, CheckCircle, Error as ErrorIcon, Warning, Timeline, Person, LocalHospital, Gavel, ArrowBack, Visibility } from '@mui/icons-material';
+import { Box, Typography, Paper, Grid, Divider, Chip, Button, List, ListItem, ListItemIcon, ListItemText, Stepper, Step, StepLabel, StepContent, IconButton, LinearProgress } from '@mui/material';
+import { Download, CheckCircle, Error as ErrorIcon, Timeline, Person, LocalHospital, Gavel, ArrowBack, Visibility } from '@mui/icons-material';
 
 const API = 'http://localhost:8080/api';
 
@@ -60,6 +60,7 @@ function ClaimDetails() {
     if (s === 'COMPLETED' || s === 'CARRIER_APPROVED') return 'success';
     if (s?.includes('REJECTED')) return 'error';
     if (s?.includes('REVIEW') || s?.includes('PROCESSING')) return 'warning';
+    if (s === 'READY_FOR_CARRIER') return 'primary';
     if (s === 'FMG_APPROVED') return 'primary';
     return 'info';
   };
@@ -71,6 +72,12 @@ function ClaimDetails() {
       case 'CARRIER': return <Gavel color="success" />;
       default: return <Timeline />;
     }
+  };
+
+  const approvalChanceColor = (value) => {
+    if (value >= 75) return 'success';
+    if (value >= 45) return 'warning';
+    return 'error';
   };
 
   const ed = claim.extractedData || {};
@@ -201,6 +208,25 @@ function ClaimDetails() {
           <Paper sx={{ p: 3, mb: 3, borderRadius: 3, boxShadow: '0 4px 14px rgba(0,0,0,0.05)' }}>
             <Typography variant="h6" fontWeight={700} gutterBottom>Final Decision Summary</Typography>
             <Divider sx={{ mb: 2 }} />
+            {claim.approvalChancePercentage !== null && claim.approvalChancePercentage !== undefined && (
+              <Box sx={{ mb: 2.5, p: 2, bgcolor: 'rgba(21,101,192,0.05)', borderRadius: 2, border: '1px solid rgba(21,101,192,0.15)' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1, mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary" fontWeight={700}>AI estimated approval chance</Typography>
+                  <Typography variant="h5" fontWeight={800} color={`${approvalChanceColor(claim.approvalChancePercentage)}.main`}>
+                    {claim.approvalChancePercentage}%
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={claim.approvalChancePercentage}
+                  color={approvalChanceColor(claim.approvalChancePercentage)}
+                  sx={{ height: 9, borderRadius: 1, mb: 1 }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  This estimate is based on the AI/rule validation step and may change after carrier review.
+                </Typography>
+              </Box>
+            )}
             {claim.status === 'SUBMITTED' ? (
               <Typography variant="body2" color="text.secondary" fontStyle="italic">Awaiting FMG processing...</Typography>
             ) : (
@@ -242,6 +268,19 @@ function ClaimDetails() {
                     <Typography variant="caption" sx={{ display: 'inline-block', bgcolor: 'rgba(0,0,0,0.05)', px: 1, py: 0.2, borderRadius: 1, mb: 1 }}>
                       By: {entry.role} ({entry.performedBy})
                     </Typography>
+                    {entry.action === 'APPROVAL_CHANCE_ESTIMATED' && claim.approvalChancePercentage !== null && claim.approvalChancePercentage !== undefined && (
+                      <Box sx={{ my: 1, p: 1.5, bgcolor: 'rgba(21,101,192,0.05)', borderRadius: 2, border: '1px solid rgba(21,101,192,0.15)' }}>
+                        <Typography variant="body2" fontWeight={800} color={`${approvalChanceColor(claim.approvalChancePercentage)}.main`}>
+                          {claim.approvalChancePercentage}% chance of approval
+                        </Typography>
+                        <LinearProgress
+                          variant="determinate"
+                          value={claim.approvalChancePercentage}
+                          color={approvalChanceColor(claim.approvalChancePercentage)}
+                          sx={{ height: 6, borderRadius: 1, mt: 1 }}
+                        />
+                      </Box>
+                    )}
                     {entry.comments && <Typography variant="body2" color="text.secondary">{entry.comments}</Typography>}
                   </StepContent>
                 </Step>

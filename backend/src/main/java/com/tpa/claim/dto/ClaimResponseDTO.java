@@ -17,5 +17,6 @@ public class ClaimResponseDTO {
     private LocalDateTime createdAt;
     private LocalDateTime processedAt;
     private BigDecimal settlementAmount;
+    private Integer approvalChancePercentage;
     private List<ClaimDocument> documents;
 }

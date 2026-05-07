@@ -33,8 +33,8 @@ function Login() {
     e.preventDefault();
     setError(''); setSuccess('');
     try {
-      await axios.post(`${API_URL}/register`, { username, password, name, email });
-      setSuccess('Registration successful! Please login.');
+      const response = await axios.post(`${API_URL}/register`, { username, password, name, email });
+      setSuccess(`Registration successful! Your Customer ID is ${response.data.customerId}. Please login.`);
       setTab(0);
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data || 'Registration failed');

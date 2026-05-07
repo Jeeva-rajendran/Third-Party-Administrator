@@ -53,6 +53,9 @@ public class Claim {
     @Column(name = "ai_explanation", columnDefinition = "TEXT")
     private String aiExplanation;
 
+    @Column(name = "approval_chance_percentage")
+    private Integer approvalChancePercentage;
+
     // Use JSON column for MySQL
     @Column(name = "extracted_data_snapshot", columnDefinition = "JSON")
     private String extractedDataSnapshot;

@@ -32,6 +32,9 @@ public class User {
     @Column(unique = true)
     private String email;
 
+    @Column(name = "customer_id", unique = true)
+    private String customerId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;

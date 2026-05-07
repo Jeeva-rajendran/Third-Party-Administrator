@@ -4,6 +4,7 @@ import com.tpa.claim.model.Role;
 import com.tpa.claim.model.User;
 import com.tpa.claim.repository.UserRepository;
 import com.tpa.claim.security.JwtUtils;
+import com.tpa.claim.service.CustomerIdService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,12 +32,14 @@ public class AuthController {
     @Autowired
     JwtUtils jwtUtils;
 
+    @Autowired
+    CustomerIdService customerIdService;
+
     @PostConstruct
     public void seedUsers() {
         if (userRepository.count() == 0) {
-            userRepository.save(new User(null, "customer", encoder.encode("customer123"), "John Customer", "customer@tpa.com", Role.ROLE_CUSTOMER));
-            userRepository.save(new User(null, "fmg", encoder.encode("fmg123"), "Bob FMG", "fmg@tpa.com", Role.ROLE_FMG));
-            userRepository.save(new User(null, "carrier", encoder.encode("carrier123"), "Carol Carrier", "carrier@tpa.com", Role.ROLE_CARRIER));
+            userRepository.save(new User(null, "fmg", encoder.encode("fmg123"), "Bob FMG", "fmg@tpa.com", null, Role.ROLE_FMG));
+            userRepository.save(new User(null, "carrier", encoder.encode("carrier123"), "Carol Carrier", "carrier@tpa.com", null, Role.ROLE_CARRIER));
         }
     }
 
@@ -52,6 +55,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "token", jwt,
                 "id", user.getId(),
+                "customerId", user.getCustomerId() != null ? user.getCustomerId() : "",
                 "username", user.getUsername(),
                 "name", user.getName(),
                 "role", user.getRole().name()
@@ -75,9 +79,13 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Email already exists"));
         }
 
-        User user = new User(null, username, encoder.encode(password), name, email, Role.ROLE_CUSTOMER);
+        String customerId = customerIdService.generateUniqueCustomerId();
+        User user = new User(null, username, encoder.encode(password), name, email, customerId, Role.ROLE_CUSTOMER);
         userRepository.save(user);
 
-        return ResponseEntity.ok(Map.of("message", "Customer registered successfully"));
+        return ResponseEntity.ok(Map.of(
+                "message", "Customer registered successfully",
+                "customerId", customerId
+        ));
     }
 }

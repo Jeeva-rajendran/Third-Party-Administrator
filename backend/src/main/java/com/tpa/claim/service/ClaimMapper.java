@@ -6,8 +6,6 @@ import com.tpa.claim.dto.FMGClaimResponse;
 import com.tpa.claim.model.Claim;
 import org.springframework.stereotype.Service;
 
-import java.util.stream.Collectors;
-
 @Service
 public class ClaimMapper {
 
@@ -36,6 +34,7 @@ public class ClaimMapper {
         dto.setCreatedAt(claim.getCreatedAt());
         dto.setProcessedAt(claim.getProcessedAt());
         dto.setSettlementAmount(claim.getSettlementAmount());
+        dto.setApprovalChancePercentage(claim.getApprovalChancePercentage());
         dto.setCustomer(claim.getCustomer());
         dto.setCustomerPolicy(claim.getCustomerPolicy());
         dto.setDocuments(claim.getDocuments());
