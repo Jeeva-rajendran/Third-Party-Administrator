@@ -6,6 +6,7 @@ import com.tpa.claim.repository.UserRepository;
 import com.tpa.claim.security.UserDetailsImpl;
 import com.tpa.claim.service.ClaimService;
 import com.tpa.claim.service.CustomerDirectoryService;
+import com.tpa.claim.service.ConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,7 +42,9 @@ public class FmgController {
     @Autowired
     private CustomerDirectoryService customerDirectoryService;
 
-    // View claims that need FMG processing — now includes SUBMITTED directly (no Client step)
+    @Autowired
+    private ConfigService configService;
+
     @GetMapping("/claims")
     public ResponseEntity<List<FMGClaimResponse>> getFmgClaims() {
         List<Claim> claims = claimRepository.findByStatusIn(
@@ -74,7 +77,6 @@ public class FmgController {
         return ResponseEntity.ok(Map.of("message", "Customer unblocked successfully"));
     }
 
-    // Process claim (OCR + Rules + AI)
     @PostMapping("/claims/{id}/process")
     public ResponseEntity<?> processClaim(@PathVariable String id) {
         try {
@@ -86,7 +88,6 @@ public class FmgController {
         }
     }
 
-    // Approve claim -> Forward to Carrier
     @PutMapping("/claims/{id}/approve")
     public ResponseEntity<?> approveClaim(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
         try {
@@ -99,7 +100,6 @@ public class FmgController {
         }
     }
 
-    // Reject claim
     @PutMapping("/claims/{id}/reject")
     public ResponseEntity<?> rejectClaim(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
         try {
@@ -112,7 +112,6 @@ public class FmgController {
         }
     }
 
-    // Flag for manual review
     @PutMapping("/claims/{id}/manual-review")
     public ResponseEntity<?> manualReview(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
         try {
@@ -120,6 +119,23 @@ public class FmgController {
             String comments = body != null ? body.get("comments") : null;
             Claim claim = claimService.fmgManualReview(id, fmgUser, comments);
             return ResponseEntity.ok(claimMapper.toFMGResponse(claim));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/config")
+    public ResponseEntity<List<SystemConfig>> getConfigs() {
+        return ResponseEntity.ok(configService.getAllConfigs());
+    }
+
+    @PutMapping("/config")
+    public ResponseEntity<?> updateConfig(@RequestBody Map<String, String> body) {
+        try {
+            for (Map.Entry<String, String> entry : body.entrySet()) {
+                configService.updateConfig(entry.getKey(), entry.getValue());
+            }
+            return ResponseEntity.ok(Map.of("message", "Configuration updated successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

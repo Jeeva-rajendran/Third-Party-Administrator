@@ -14,9 +14,11 @@ import java.util.List;
 public class RuleEngineService {
 
     private final ClaimRepository claimRepository;
+    private final ConfigService configService;
 
-    public RuleEngineService(ClaimRepository claimRepository) {
+    public RuleEngineService(ClaimRepository claimRepository, ConfigService configService) {
         this.claimRepository = claimRepository;
+        this.configService = configService;
     }
 
     public void evaluateRules(Claim claim) {
@@ -85,12 +87,13 @@ public class RuleEngineService {
         results.add(new RuleResult(null, claim, "R8", r8, "Claimed amount greater than total bill"));
         if (r8) manualReview = true;
 
-        // R9: Claimed amount greater than 50,000
+        // R9: Claimed amount greater than threshold (Dynamic)
         boolean r9 = false;
-        if (data.getClaimedAmount() != null && data.getClaimedAmount().compareTo(new BigDecimal("50000")) > 0) {
+        BigDecimal r9Threshold = configService.getConfigAsBigDecimal("RULE_R1_THRESHOLD", "100000");
+        if (data.getClaimedAmount() != null && data.getClaimedAmount().compareTo(r9Threshold) > 0) {
             r9 = true;
         }
-        results.add(new RuleResult(null, claim, "R9", r9, "Claimed amount greater than 50000"));
+        results.add(new RuleResult(null, claim, "R9", r9, "Claimed amount greater than threshold (" + r9Threshold + ")"));
         if (r9) manualReview = true;
 
         // R10: Possible duplicate claim (same policy + patient + hospital + admission date)

@@ -2,7 +2,8 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Paper, Chip, Alert, Grid, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Box, Typography, Button, Paper, Chip, Alert, Grid, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, TextField, List, ListItem, ListItemText, Switch } from '@mui/material';
+import { Settings, AccessTime, Timer, Warning, CheckCircle, Info } from '@mui/icons-material';
 
 const API = 'http://localhost:8080/api';
 
@@ -20,13 +21,19 @@ function FmgDashboard() {
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [customerToBlock, setCustomerToBlock] = useState(null);
+  const [configs, setConfigs] = useState([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const headers = { Authorization: `Bearer ${auth.token}` };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000); // Update clock every minute
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchData = async () => {
-    await Promise.all([fetchClaims(), fetchCustomers()]);
+    await Promise.all([fetchClaims(), fetchCustomers(), fetchConfigs()]);
   };
 
   const fetchClaims = async () => {
@@ -47,6 +54,20 @@ function FmgDashboard() {
       console.error(err);
       setError('Failed to fetch customers.');
     }
+  };
+  const fetchConfigs = async () => {
+    try {
+      const res = await axios.get(`${API}/fmg/config`, { headers });
+      setConfigs(res.data);
+    } catch (err) { console.error(err); }
+  };
+
+  const handleUpdateConfig = async (key, value) => {
+    try {
+      await axios.put(`${API}/fmg/config`, { [key]: value }, { headers });
+      setSuccess(`Setting ${key} updated.`);
+      fetchConfigs();
+    } catch (err) { setError('Update failed'); }
   };
 
   const processClaim = async (id) => {
@@ -114,6 +135,20 @@ function FmgDashboard() {
     MANUAL_REVIEW: 'Manual Review - Sent to Carrier',
     FMG_REJECTED: 'Rejected by Validation Rules',
   }[s] || s);
+  const getQueueAge = (createdAt) => {
+    const diff = currentTime - new Date(createdAt);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return { hours, mins };
+  };
+
+  const getSlaStatus = (hours) => {
+    const amber = parseInt(configs.find(c => c.key === 'SLA_AMBER_HOURS')?.value || '12');
+    const red = parseInt(configs.find(c => c.key === 'SLA_RED_HOURS')?.value || '24');
+    if (hours >= red) return { color: 'error', label: 'SLA BREACHED', icon: <Warning fontSize="small" /> };
+    if (hours >= amber) return { color: 'warning', label: 'URGENT', icon: <Timer fontSize="small" /> };
+    return { color: 'success', label: 'ON TRACK', icon: <AccessTime fontSize="small" /> };
+  };
 
   return (
     <Box>
@@ -131,6 +166,9 @@ function FmgDashboard() {
         <Button variant={tab === 'customers' ? 'contained' : 'outlined'} onClick={() => setTab('customers')} sx={{ fontWeight: 600 }}>
           Customers ({customers.length})
         </Button>
+        <Button variant={tab === 'settings' ? 'contained' : 'outlined'} onClick={() => setTab('settings')} startIcon={<Settings />} sx={{ fontWeight: 600 }}>
+          Rule Settings
+        </Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
@@ -147,7 +185,27 @@ function FmgDashboard() {
                 Claim ID: {c.id.substring(0, 8)}...
               </Typography>
               <Typography variant="body2">Customer: {c.customer?.name} | Policy: {c.customerPolicy?.policyNumber}</Typography>
-              <Typography variant="caption" color="text.secondary">Submitted: {new Date(c.createdAt).toLocaleString()}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">Submitted: {new Date(c.createdAt).toLocaleString()}</Typography>
+                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+                {(() => {
+                  const age = getQueueAge(c.createdAt);
+                  const sla = getSlaStatus(age.hours);
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Chip 
+                        icon={sla.icon} 
+                        label={`${age.hours}h ${age.mins}m in queue`} 
+                        size="small" 
+                        color={sla.color} 
+                        variant="outlined" 
+                        sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }} 
+                      />
+                      <Typography variant="caption" fontWeight={800} color={`${sla.color}.main`}>{sla.label}</Typography>
+                    </Box>
+                  );
+                })()}
+              </Box>
             </Box>
             
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -267,6 +325,70 @@ function FmgDashboard() {
           </TableContainer>
           {customers.length === 0 && <Typography sx={{ p: 3 }} color="text.secondary">No registered customers found.</Typography>}
         </Paper>
+      )}
+
+      {tab === 'settings' && (
+        <Box>
+          <Typography variant="h6" fontWeight={700} gutterBottom>Interactive Rule Configuration</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Adjust rule thresholds and SLA limits. Changes take effect immediately for all new validations.</Typography>
+          
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Settings color="primary" /> Business Rule Thresholds
+                </Typography>
+                <List>
+                  {configs.filter(c => c.key.startsWith('RULE_')).map(config => (
+                    <ListItem key={config.key} divider>
+                      <ListItemText 
+                        primary={config.description} 
+                        secondary={`Current Value: ${config.key.includes('THRESHOLD') ? '₹' : ''}${config.value}`} 
+                      />
+                      <TextField 
+                        size="small" 
+                        type="number"
+                        defaultValue={config.value}
+                        onBlur={(e) => handleUpdateConfig(config.key, e.target.value)}
+                        sx={{ width: 120 }}
+                        InputProps={{ startAdornment: config.key.includes('THRESHOLD') ? <Typography variant="caption" sx={{ mr: 1 }}>₹</Typography> : null }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AccessTime color="secondary" /> SLA Monitoring Limits
+                </Typography>
+                <List>
+                  {configs.filter(c => c.key.startsWith('SLA_')).map(config => (
+                    <ListItem key={config.key} divider>
+                      <ListItemText 
+                        primary={config.description} 
+                        secondary={`Alert after ${config.value} hours`} 
+                      />
+                      <TextField 
+                        size="small" 
+                        type="number"
+                        defaultValue={config.value}
+                        onBlur={(e) => handleUpdateConfig(config.key, e.target.value)}
+                        sx={{ width: 100 }}
+                        InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 1 }}>hrs</Typography> }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  These limits determine when claims are flagged as **URGENT** or **BREACHED** on the dashboard.
+                </Alert>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
       )}
 
       <Dialog open={customerDetailsOpen} onClose={() => setCustomerDetailsOpen(false)} maxWidth="md" fullWidth>
