@@ -19,4 +19,5 @@ public class ClaimResponseDTO {
     private BigDecimal settlementAmount;
     private Integer approvalChancePercentage;
     private List<ClaimDocument> documents;
+    private long queueAgeMs;
 }

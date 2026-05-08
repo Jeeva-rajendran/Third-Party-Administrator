@@ -122,23 +122,27 @@ function FmgDashboard() {
     : 'N/A';
 
   const statusColor = (s) => {
-    if (s === 'FMG_REJECTED') return 'error';
+    if (s === 'FMG_REJECTED' || s === 'CARRIER_REJECTED') return 'error';
     if (s === 'MANUAL_REVIEW') return 'warning';
-    if (s === 'READY_FOR_CARRIER') return 'success';
+    if (s === 'READY_FOR_CARRIER' || s === 'CARRIER_APPROVED') return 'success';
     if (s === 'SUBMITTED') return 'info';
+    if (s === 'COMPLETED') return 'success';
     return 'default';
   };
 
   const statusLabel = (s) => ({
-    SUBMITTED: 'Awaiting FMG Validation',
-    READY_FOR_CARRIER: 'Rules Passed - Sent to Carrier',
-    MANUAL_REVIEW: 'Manual Review - Sent to Carrier',
-    FMG_REJECTED: 'Rejected by Validation Rules',
+    SUBMITTED: 'Awaiting Validation',
+    READY_FOR_CARRIER: 'Sent to Carrier',
+    MANUAL_REVIEW: 'Manual Review',
+    FMG_REJECTED: 'FMG Rejected',
+    CARRIER_APPROVED: 'Carrier Approved',
+    CARRIER_REJECTED: 'Carrier Rejected',
+    COMPLETED: 'Completed',
   }[s] || s);
-  const getQueueAge = (createdAt) => {
-    const diff = currentTime - new Date(createdAt);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const getQueueAge = (queueAgeMs) => {
+    const totalMins = Math.floor(queueAgeMs / (1000 * 60));
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
     return { hours, mins };
   };
 
@@ -149,6 +153,10 @@ function FmgDashboard() {
     if (hours >= amber) return { color: 'warning', label: 'URGENT', icon: <Timer fontSize="small" /> };
     return { color: 'success', label: 'ON TRACK', icon: <AccessTime fontSize="small" /> };
   };
+
+  // Split claims into active queue and history
+  const activeClaims = claims.filter(c => ['SUBMITTED', 'READY_FOR_CARRIER', 'MANUAL_REVIEW'].includes(c.status));
+  const historyClaims = claims.filter(c => ['FMG_REJECTED', 'CARRIER_APPROVED', 'CARRIER_REJECTED', 'COMPLETED'].includes(c.status));
 
   return (
     <Box>
@@ -161,7 +169,10 @@ function FmgDashboard() {
 
       <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <Button variant={tab === 'claims' ? 'contained' : 'outlined'} onClick={() => setTab('claims')} sx={{ fontWeight: 600 }}>
-          Claims ({claims.length})
+          Active Queue ({activeClaims.length})
+        </Button>
+        <Button variant={tab === 'history' ? 'contained' : 'outlined'} onClick={() => setTab('history')} sx={{ fontWeight: 600 }}>
+          Claim History ({historyClaims.length})
         </Button>
         <Button variant={tab === 'customers' ? 'contained' : 'outlined'} onClick={() => setTab('customers')} sx={{ fontWeight: 600 }}>
           Customers ({customers.length})
@@ -176,92 +187,81 @@ function FmgDashboard() {
 
       {tab === 'claims' && (
         <Box>
-      <Typography variant="h6" gutterBottom>Pending Claims ({claims.length})</Typography>
-      {claims.map(c => (
-        <Paper key={c.id} sx={{ p: 2, mb: 2, borderLeft: `4px solid ${c.status === 'SUBMITTED' ? '#2196f3' : '#ff9800'}` }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-            <Box>
-              <Typography fontWeight={700} sx={{ cursor: 'pointer', color: 'primary.main' }} onClick={() => navigate(`/claims/${c.id}`)}>
-                Claim ID: {c.id.substring(0, 8)}...
-              </Typography>
-              <Typography variant="body2">Customer: {c.customer?.name} | Policy: {c.customerPolicy?.policyNumber}</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">Submitted: {new Date(c.createdAt).toLocaleString()}</Typography>
-                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-                {(() => {
-                  const age = getQueueAge(c.createdAt);
-                  const sla = getSlaStatus(age.hours);
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Chip 
-                        icon={sla.icon} 
-                        label={`${age.hours}h ${age.mins}m in queue`} 
-                        size="small" 
-                        color={sla.color} 
-                        variant="outlined" 
-                        sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }} 
-                      />
-                      <Typography variant="caption" fontWeight={800} color={`${sla.color}.main`}>{sla.label}</Typography>
-                    </Box>
-                  );
-                })()}
-              </Box>
-            </Box>
-            
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Chip label={statusLabel(c.status)} color={statusColor(c.status)} size="small" sx={{ fontWeight: 600 }} />
-              
-              {c.status === 'SUBMITTED' && (
-                <Button variant="contained" size="small" onClick={() => processClaim(c.id)} sx={{ background: 'linear-gradient(135deg, #1565c0, #1976d2)' }}>
-                  Run AI Validation
-                </Button>
-              )}
-            </Box>
-          </Box>
-
-          {/* Quick OCR & AI Preview if processed */}
-          {c.status !== 'SUBMITTED' && c.extractedData && (
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 2 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="primary" gutterBottom>OCR Extraction Summary</Typography>
-                  <Typography variant="caption" display="block">Patient: {c.extractedData.claimFormPatientName}</Typography>
-                  <Typography variant="caption" display="block">Claimed Amount: ₹{c.extractedData.claimedAmount}</Typography>
-                  <Typography variant="caption" display="block">Total Bill: ₹{c.extractedData.totalBillAmount}</Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="secondary" gutterBottom>AI & Rule Status</Typography>
-                  <Typography variant="caption" display="block" color={c.ruleResults?.some(r => r.triggered) ? "error.main" : "success.main"}>
-                    Rules Triggered: {c.ruleResults?.filter(r => r.triggered).length || 0}
+          <Typography variant="h6" gutterBottom fontWeight={600}>Active Processing Queue</Typography>
+          {activeClaims.map(c => (
+            <Paper key={c.id} sx={{ p: 1.5, mb: 1.5, borderLeft: `4px solid ${c.status === 'SUBMITTED' ? '#2196f3' : c.status === 'READY_FOR_CARRIER' ? '#4caf50' : '#ff9800'}` }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight={700} sx={{ cursor: 'pointer', color: 'primary.main', whiteSpace: 'nowrap' }} onClick={() => navigate(`/claims/${c.id}`)}>
+                    {c.id.substring(0, 8)}...
                   </Typography>
-                  {c.decisionReason && (
-                    <Typography variant="caption" display="block" sx={{ mt: 0.5, fontWeight: 600 }}>
-                      Result: {c.decisionReason}
-                    </Typography>
-                  )}
-                  {c.aiExplanation && (
-                    <Typography variant="caption" display="block" sx={{ mt: 0.5, fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      AI: {c.aiExplanation}
-                    </Typography>
-                  )}
-                </Grid>
-              </Grid>
-              {c.ruleResults?.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Divider sx={{ mb: 1 }} />
-                  {c.ruleResults.filter(r => r.triggered).map(rule => (
-                    <Chip key={rule.ruleId} label={`${rule.ruleId}: ${rule.description}`} color={rule.ruleId === 'R1' || rule.ruleId === 'R2' || rule.ruleId === 'R3' ? 'error' : 'warning'} size="small" sx={{ mr: 1, mb: 1 }} />
-                  ))}
+                  <Typography variant="caption" color="text.secondary" noWrap>{c.customer?.name}</Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>{c.customerPolicy?.policyNumber}</Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>{new Date(c.createdAt).toLocaleDateString()}</Typography>
+                  {c.status === 'SUBMITTED' && c.queueAgeMs > 0 && (() => {
+                    const age = getQueueAge(c.queueAgeMs);
+                    const sla = getSlaStatus(age.hours);
+                    return (
+                      <Chip icon={sla.icon} label={`${age.hours}h ${age.mins}m`} size="small" color={sla.color} variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }} />
+                    );
+                  })()}
                 </Box>
-              )}
-              <Button size="small" sx={{ mt: 1 }} onClick={() => navigate(`/claims/${c.id}`)}>View Full Details</Button>
-            </Box>
-          )}
-        </Paper>
-      ))}
-
-      {claims.length === 0 && <Typography color="text.secondary">No claims pending FMG action.</Typography>}
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
+                  <Chip label={statusLabel(c.status)} color={statusColor(c.status)} size="small" sx={{ fontWeight: 600, fontSize: '0.7rem' }} />
+                  {c.status === 'SUBMITTED' && (
+                    <Button variant="contained" size="small" onClick={() => processClaim(c.id)} sx={{ background: 'linear-gradient(135deg, #1565c0, #1976d2)', fontSize: '0.75rem', py: 0.5, whiteSpace: 'nowrap' }}>
+                      Run AI Validation
+                    </Button>
+                  )}
+                  <Button size="small" variant="text" onClick={() => navigate(`/claims/${c.id}`)} sx={{ fontSize: '0.75rem', minWidth: 'auto' }}>Details</Button>
+                </Box>
+              </Box>
+            </Paper>
+          ))}
+          {activeClaims.length === 0 && <Typography color="text.secondary">No claims pending FMG action.</Typography>}
         </Box>
+      )}
+
+      {tab === 'history' && (
+        <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Box sx={{ p: 2, pb: 1 }}>
+            <Typography variant="h6" fontWeight={700}>Claim History</Typography>
+            <Typography variant="body2" color="text.secondary">All processed claims with final outcomes</Typography>
+          </Box>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Claim ID</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Customer</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Policy</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Settlement</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Submitted</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {historyClaims.map(c => (
+                  <TableRow key={c.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={700} color="primary.main" sx={{ cursor: 'pointer' }} onClick={() => navigate(`/claims/${c.id}`)}>
+                        {c.id.substring(0, 8)}...
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{c.customer?.name}</TableCell>
+                    <TableCell>{c.customerPolicy?.policyNumber}</TableCell>
+                    <TableCell><Chip label={statusLabel(c.status)} color={statusColor(c.status)} size="small" sx={{ fontWeight: 600 }} /></TableCell>
+                    <TableCell>{c.settlementAmount ? `₹${Number(c.settlementAmount).toLocaleString()}` : 'N/A'}</TableCell>
+                    <TableCell>{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell><Button size="small" onClick={() => navigate(`/claims/${c.id}`)}>View</Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {historyClaims.length === 0 && <Typography sx={{ p: 3 }} color="text.secondary">No claim history available.</Typography>}
+        </Paper>
       )}
 
       {tab === 'customers' && (

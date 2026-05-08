@@ -5,6 +5,8 @@ import com.tpa.claim.dto.CustomerClaimResponse;
 import com.tpa.claim.dto.FMGClaimResponse;
 import com.tpa.claim.model.Claim;
 import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+import java.time.Duration;
 
 @Service
 public class ClaimMapper {
@@ -38,5 +40,11 @@ public class ClaimMapper {
         dto.setCustomer(claim.getCustomer());
         dto.setCustomerPolicy(claim.getCustomerPolicy());
         dto.setDocuments(claim.getDocuments());
+        
+        if (claim.getCreatedAt() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            Duration duration = Duration.between(claim.getCreatedAt(), now);
+            dto.setQueueAgeMs(duration.toMillis());
+        }
     }
 }

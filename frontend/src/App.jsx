@@ -1,7 +1,7 @@
 import React, { useState, useMemo, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ThemeProvider, createTheme, Box, AppBar, Toolbar, Typography, Button, Container, IconButton } from '@mui/material';
-import { Brightness4, Brightness7, ExitToApp } from '@mui/icons-material';
+import { ThemeProvider, createTheme, Box, AppBar, Toolbar, Typography, Button, Container, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Divider } from '@mui/material';
+import { Brightness4, Brightness7, ExitToApp, Warning } from '@mui/icons-material';
 import Login from './pages/Login';
 import CustomerDashboard from './pages/CustomerDashboard';
 import FmgDashboard from './pages/FmgDashboard';
@@ -35,6 +35,12 @@ function Layout({ children }) {
   const { auth, logout } = useContext(AuthContext);
   const { toggleTheme, mode } = useContext(ThemeContext);
   const navigate = useNavigate();
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    setLogoutDialogOpen(false);
+  };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
@@ -51,13 +57,31 @@ function Layout({ children }) {
               <Typography variant="body2" sx={{ fontWeight: 600, bgcolor: 'rgba(255,255,255,0.15)', px: 1.5, py: 0.5, borderRadius: 1 }}>
                 {auth.name} ({auth.role.replace('ROLE_', '')})
               </Typography>
-              <Button color="inherit" onClick={logout} startIcon={<ExitToApp />} size="small" variant="outlined" sx={{ borderColor: 'rgba(255,255,255,0.5)' }}>
+              <Button color="inherit" onClick={() => setLogoutDialogOpen(true)} startIcon={<ExitToApp />} size="small" variant="outlined" sx={{ borderColor: 'rgba(255,255,255,0.5)' }}>
                 Logout
               </Button>
             </Box>
           )}
         </Toolbar>
       </AppBar>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={logoutDialogOpen} onClose={() => setLogoutDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontWeight: 700 }}>
+          <Warning color="warning" /> Confirm Logout
+        </DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to log out of the TPA Claim System?</Typography>
+        </DialogContent>
+        <Divider />
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setLogoutDialogOpen(false)} color="inherit">Cancel</Button>
+          <Button onClick={handleLogout} variant="contained" color="error" startIcon={<ExitToApp />}>
+            Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 } }}>
         <Container maxWidth="xl">
           {children}

@@ -48,7 +48,8 @@ public class FmgController {
     @GetMapping("/claims")
     public ResponseEntity<List<FMGClaimResponse>> getFmgClaims() {
         List<Claim> claims = claimRepository.findByStatusIn(
-                Arrays.asList("SUBMITTED", "READY_FOR_CARRIER", "MANUAL_REVIEW", "FMG_REJECTED"));
+                Arrays.asList("SUBMITTED", "READY_FOR_CARRIER", "MANUAL_REVIEW", "FMG_REJECTED",
+                        "CARRIER_APPROVED", "CARRIER_REJECTED", "COMPLETED"));
         return ResponseEntity.ok(claims.stream()
                 .map(claimMapper::toFMGResponse)
                 .collect(Collectors.toList()));
