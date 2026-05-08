@@ -3,7 +3,7 @@ import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, Paper, Chip, Alert, TextField, Grid, Card, CardContent, CardActions, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, IconButton, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
-import { Add, Edit, Delete, CheckCircle, Cancel, HourglassEmpty } from '@mui/icons-material';
+import { Add, Edit, Delete, CheckCircle, Cancel, HourglassEmpty, VerifiedUser, Payments, CalendarMonth, HealthAndSafety } from '@mui/icons-material';
 
 const API = 'http://localhost:8080/api';
 
@@ -137,7 +137,7 @@ function CarrierDashboard() {
   };
 
   const formatCurrency = (value) => value !== null && value !== undefined
-    ? `₹${Number(value).toLocaleString()}`
+    ? `Rs. ${Number(value).toLocaleString()}`
     : 'N/A';
 
   const statusChip = (status) => {
@@ -149,6 +149,35 @@ function CarrierDashboard() {
       default: return <Chip label={status} color="default" size="small" />;
     }
   };
+
+  const policyAccent = (type) => ({
+    HEALTH: '#2e7d32',
+    AD_D: '#7b1fa2',
+    ACCIDENT: '#ef6c00',
+  }[type] || '#2e7d32');
+
+  const policyTypeLabel = (type) => ({
+    HEALTH: 'Health',
+    AD_D: 'AD&D',
+    ACCIDENT: 'Accident',
+  }[type] || type || 'Policy');
+
+  const PolicyMetric = ({ icon, label, value, color = 'primary.main' }) => (
+    <Box sx={{
+      p: 1.25,
+      borderRadius: 2,
+      bgcolor: 'rgba(0,0,0,0.025)',
+      border: '1px solid',
+      borderColor: 'divider',
+      minHeight: 74,
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, color }}>
+        {icon}
+        <Typography variant="caption" color="text.secondary" fontWeight={700}>{label}</Typography>
+      </Box>
+      <Typography variant="body2" fontWeight={800}>{value}</Typography>
+    </Box>
+  );
 
   // Split claims into pending and history
   const pendingClaims = claims.filter(c => c.status === 'READY_FOR_CARRIER' || c.status === 'MANUAL_REVIEW');
@@ -278,33 +307,62 @@ function CarrierDashboard() {
         <Grid container spacing={3}>
           {policies.map(p => (
             <Grid item xs={12} sm={6} md={4} key={p.id}>
-              <Card elevation={3} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" fontWeight={700} gutterBottom>{p.policyName}</Typography>
-                  <Chip label={p.policyType} size="small" color="primary" sx={{ mb: 2, fontWeight: 600 }} />
+              <Card elevation={0} sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: 2,
+                overflow: 'hidden',
+                border: '1px solid',
+                borderColor: 'divider',
+                transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 14px 34px rgba(17, 24, 39, 0.14)',
+                  borderColor: policyAccent(p.policyType),
+                },
+              }}>
+                <Box sx={{ height: 6, bgcolor: policyAccent(p.policyType) }} />
+                <CardContent sx={{ flexGrow: 1, p: 2.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1.5, mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2 }}>{p.policyName}</Typography>
+                      <Typography variant="caption" color="text.secondary">Managed policy</Typography>
+                    </Box>
+                    <Chip
+                      icon={<HealthAndSafety sx={{ fontSize: 16 }} />}
+                      label={policyTypeLabel(p.policyType)}
+                      size="small"
+                      sx={{ bgcolor: `${policyAccent(p.policyType)}14`, color: policyAccent(p.policyType), fontWeight: 800 }}
+                    />
+                  </Box>
                   
-                  <Grid container spacing={1} sx={{ mb: 2 }}>
+                  <Grid container spacing={1.25} sx={{ mb: 2 }}>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Coverage</Typography>
-                      <Typography variant="body2" fontWeight={600}>₹{p.coverageAmount?.toLocaleString()}</Typography>
+                      <PolicyMetric icon={<VerifiedUser fontSize="small" />} label="Coverage" value={formatCurrency(p.coverageAmount)} color="success.main" />
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Premium/Yr</Typography>
-                      <Typography variant="body2" fontWeight={600}>₹{p.premium?.toLocaleString()}</Typography>
+                      <PolicyMetric icon={<Payments fontSize="small" />} label="Premium/Yr" value={formatCurrency(p.premium)} color="warning.main" />
                     </Grid>
                   </Grid>
                   
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="caption" display="block" color="text.secondary">Valid: {p.validFrom} to {p.validTo}</Typography>
+                  <Divider sx={{ mb: 1.5 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', mb: p.description ? 1 : 0 }}>
+                    <CalendarMonth fontSize="small" />
+                    <Typography variant="caption">Valid {p.validFrom || 'N/A'} to {p.validTo || 'N/A'}</Typography>
+                  </Box>
                   {p.description && (
-                    <Typography variant="caption" display="block" sx={{ mt: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {p.description}
                     </Typography>
                   )}
                 </CardContent>
-                <CardActions sx={{ justifyContent: 'flex-end', bgcolor: 'rgba(0,0,0,0.02)' }}>
-                  <IconButton color="primary" onClick={() => handleEditPolicy(p)}><Edit /></IconButton>
-                  <IconButton color="error" onClick={() => handleDeletePolicy(p.id)}><Delete /></IconButton>
+                <CardActions sx={{ justifyContent: 'space-between', px: 2.5, py: 1.5, bgcolor: 'rgba(0,0,0,0.02)', borderTop: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>Policy actions</Typography>
+                  <Box sx={{ display: 'flex', gap: 0.75 }}>
+                    <IconButton size="small" color="primary" onClick={() => handleEditPolicy(p)} sx={{ bgcolor: 'rgba(25,118,210,0.08)', '&:hover': { bgcolor: 'rgba(25,118,210,0.16)' } }}><Edit fontSize="small" /></IconButton>
+                    <IconButton size="small" color="error" onClick={() => handleDeletePolicy(p.id)} sx={{ bgcolor: 'rgba(211,47,47,0.08)', '&:hover': { bgcolor: 'rgba(211,47,47,0.16)' } }}><Delete fontSize="small" /></IconButton>
+                  </Box>
                 </CardActions>
               </Card>
             </Grid>
@@ -523,3 +581,4 @@ function CarrierDashboard() {
 }
 
 export default CarrierDashboard;
+

@@ -2,8 +2,8 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Paper, Grid, Chip, Card, CardContent, CardActions, Alert, LinearProgress } from '@mui/material';
-import { Send, Policy, ShoppingCart, Assignment } from '@mui/icons-material';
+import { Box, Typography, Button, Paper, Grid, Chip, Card, CardContent, CardActions, Alert, LinearProgress, Divider } from '@mui/material';
+import { Send, Policy, ShoppingCart, Assignment, VerifiedUser, CalendarMonth, Payments, HealthAndSafety, ReceiptLong } from '@mui/icons-material';
 
 const API = 'http://localhost:8080/api';
 
@@ -70,6 +70,39 @@ function CustomerDashboard() {
     if (value >= 45) return 'warning';
     return 'error';
   };
+
+  const formatCurrency = (value) => value !== null && value !== undefined
+    ? `Rs. ${Number(value).toLocaleString()}`
+    : 'N/A';
+
+  const policyAccent = (type) => ({
+    HEALTH: '#1976d2',
+    AD_D: '#7b1fa2',
+    ACCIDENT: '#ef6c00',
+  }[type] || '#1976d2');
+
+  const policyTypeLabel = (type) => ({
+    HEALTH: 'Health',
+    AD_D: 'AD&D',
+    ACCIDENT: 'Accident',
+  }[type] || type || 'Policy');
+
+  const PolicyMetric = ({ icon, label, value, color = 'primary.main' }) => (
+    <Box sx={{
+      p: 1.25,
+      borderRadius: 2,
+      bgcolor: 'rgba(0,0,0,0.025)',
+      border: '1px solid',
+      borderColor: 'divider',
+      minHeight: 74,
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, color }}>
+        {icon}
+        <Typography variant="caption" color="text.secondary" fontWeight={700}>{label}</Typography>
+      </Box>
+      <Typography variant="body2" fontWeight={800}>{value}</Typography>
+    </Box>
+  );
 
   const ApprovalChance = ({ value }) => {
     if (value === null || value === undefined) return null;
@@ -154,17 +187,56 @@ function CustomerDashboard() {
         <Grid container spacing={2}>
           {policies.map(p => (
             <Grid item xs={12} sm={6} md={4} key={p.id}>
-              <Card elevation={3} sx={{ borderRadius: 3, transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-4px)', boxShadow: 6 } }}>
-                <CardContent>
-                  <Typography variant="h6" fontWeight={700}>{p.policyName}</Typography>
-                  <Chip label={p.policyType} size="small" color="primary" variant="outlined" sx={{ my: 1 }} />
-                  <Typography variant="body2">Coverage: ₹{p.coverageAmount?.toLocaleString()}</Typography>
-                  <Typography variant="body2">Premium: ₹{p.premium?.toLocaleString()}/yr</Typography>
-                  <Typography variant="caption" color="text.secondary">Valid: {p.validFrom} to {p.validTo}</Typography>
-                  {p.description && <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>{p.description}</Typography>}
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 2,
+                overflow: 'hidden',
+                border: '1px solid',
+                borderColor: 'divider',
+                transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 14px 34px rgba(17, 24, 39, 0.14)',
+                  borderColor: policyAccent(p.policyType),
+                },
+              }}>
+                <Box sx={{ height: 6, bgcolor: policyAccent(p.policyType) }} />
+                <CardContent sx={{ p: 2.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, alignItems: 'flex-start', mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2 }}>{p.policyName}</Typography>
+                      <Typography variant="caption" color="text.secondary">Coverage plan</Typography>
+                    </Box>
+                    <Chip
+                      icon={<HealthAndSafety sx={{ fontSize: 16 }} />}
+                      label={policyTypeLabel(p.policyType)}
+                      size="small"
+                      sx={{ bgcolor: `${policyAccent(p.policyType)}14`, color: policyAccent(p.policyType), fontWeight: 800 }}
+                    />
+                  </Box>
+                  <Grid container spacing={1.25} sx={{ mb: 2 }}>
+                    <Grid item xs={6}>
+                      <PolicyMetric icon={<VerifiedUser fontSize="small" />} label="Coverage" value={formatCurrency(p.coverageAmount)} color="success.main" />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <PolicyMetric icon={<Payments fontSize="small" />} label="Premium/Yr" value={formatCurrency(p.premium)} color="warning.main" />
+                    </Grid>
+                  </Grid>
+                  <Divider sx={{ mb: 1.5 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', mb: p.description ? 1 : 0 }}>
+                    <CalendarMonth fontSize="small" />
+                    <Typography variant="caption">Valid {p.validFrom || 'N/A'} to {p.validTo || 'N/A'}</Typography>
+                  </Box>
+                  {p.description && (
+                    <Typography variant="body2" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {p.description}
+                    </Typography>
+                  )}
                 </CardContent>
-                <CardActions sx={{ px: 2, pb: 2 }}>
-                  <Button size="small" variant="contained" onClick={() => purchasePolicy(p.id)} sx={{ fontWeight: 600 }}>Purchase Policy</Button>
+                <CardActions sx={{ px: 2.5, pb: 2.5, pt: 0 }}>
+                  <Button fullWidth variant="contained" startIcon={<ShoppingCart />} onClick={() => purchasePolicy(p.id)} sx={{ fontWeight: 800, borderRadius: 2 }}>
+                    Purchase Policy
+                  </Button>
                 </CardActions>
               </Card>
             </Grid>
@@ -178,15 +250,32 @@ function CustomerDashboard() {
         <Grid container spacing={2}>
           {myPolicies.map(cp => (
             <Grid item xs={12} sm={6} key={cp.id}>
-              <Card elevation={2} sx={{ borderRadius: 3, borderLeft: `4px solid ${cp.status === 'ACTIVE' ? '#43a047' : '#ef5350'}` }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h6" fontWeight={600}>{cp.policy?.policyName}</Typography>
-                    <Chip label={cp.status} color={cp.status === 'ACTIVE' ? 'success' : 'error'} size="small" />
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: cp.status === 'ACTIVE' ? 'success.light' : 'error.light',
+                overflow: 'hidden',
+                transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+                '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(17, 24, 39, 0.12)' },
+              }}>
+                <Box sx={{ height: 6, bgcolor: cp.status === 'ACTIVE' ? 'success.main' : 'error.main' }} />
+                <CardContent sx={{ p: 2.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1.5, mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2 }}>{cp.policy?.policyName}</Typography>
+                      <Typography variant="caption" color="text.secondary">Policy #{cp.policyNumber}</Typography>
+                    </Box>
+                    <Chip label={cp.status} color={cp.status === 'ACTIVE' ? 'success' : 'error'} size="small" sx={{ fontWeight: 800 }} />
                   </Box>
-                  <Typography variant="body2" sx={{ mt: 1 }}>Policy #: <b>{cp.policyNumber}</b></Typography>
-                  <Typography variant="body2">Coverage: ₹{cp.policy?.coverageAmount?.toLocaleString()}</Typography>
-                  <Typography variant="caption" color="text.secondary">Purchased: {cp.purchaseDate ? new Date(cp.purchaseDate).toLocaleDateString() : 'N/A'}</Typography>
+                  <Grid container spacing={1.25}>
+                    <Grid item xs={6}>
+                      <PolicyMetric icon={<VerifiedUser fontSize="small" />} label="Coverage" value={formatCurrency(cp.policy?.coverageAmount)} color="success.main" />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <PolicyMetric icon={<ReceiptLong fontSize="small" />} label="Purchased" value={cp.purchaseDate ? new Date(cp.purchaseDate).toLocaleDateString() : 'N/A'} color="primary.main" />
+                    </Grid>
+                  </Grid>
                 </CardContent>
               </Card>
             </Grid>
