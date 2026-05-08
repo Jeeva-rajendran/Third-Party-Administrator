@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Box, Button, TextField, Typography, Paper, Tabs, Tab, Alert, Divider } from '@mui/material';
+import { Box, Button, TextField, Typography, Paper, Tabs, Tab, Alert, Divider, Dialog, DialogTitle, DialogContent } from '@mui/material';
 
 const API_URL = 'http://localhost:8080/api/auth';
 
@@ -14,6 +14,7 @@ function Login() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [blockInfo, setBlockInfo] = useState(null);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -25,7 +26,14 @@ function Login() {
       login(response.data);
       navigate('/');
     } catch (err) {
-      setError('Invalid username or password');
+      if (err.response?.status === 403 && err.response?.data?.reason) {
+        setBlockInfo({
+          message: err.response.data.error,
+          reason: err.response.data.reason
+        });
+      } else {
+        setError('Invalid username or password');
+      }
     }
   };
 
@@ -119,6 +127,29 @@ function Login() {
           </form>
         )}
       </Paper>
+
+      <Dialog open={!!blockInfo} onClose={() => setBlockInfo(null)}>
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 700 }}>Account Blocked</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="h6" gutterBottom color="error">
+            {blockInfo?.message}
+          </Typography>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(211,47,47,0.05)', borderRadius: 2, border: '1px solid rgba(211,47,47,0.1)' }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Reason for blocking:
+            </Typography>
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+              {blockInfo?.reason}
+            </Typography>
+          </Box>
+          <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+            Please contact support or your administrator for more information.
+          </Typography>
+        </DialogContent>
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button variant="contained" onClick={() => setBlockInfo(null)}>Understood</Button>
+        </Box>
+      </Dialog>
     </Box>
   );
 }

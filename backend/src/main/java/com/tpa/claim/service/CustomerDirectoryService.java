@@ -108,6 +108,8 @@ public class CustomerDirectoryService {
                 pendingClaims,
                 totalClaimedAmount,
                 totalSettledAmount,
+                customer.isBlocked(),
+                customer.getBlockReason(),
                 policyHistory,
                 claimHistory
         );
@@ -144,8 +146,28 @@ public class CustomerDirectoryService {
                 activePolicies,
                 inactivePolicies,
                 status,
-                lastPurchaseDate
+                lastPurchaseDate,
+                customer.isBlocked(),
+                customer.getBlockReason()
         );
+    }
+
+    public void blockCustomer(Long customerId, String reason) {
+        User customer = userRepository.findById(customerId)
+                .filter(user -> user.getRole() == Role.ROLE_CUSTOMER)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found"));
+        customer.setBlocked(true);
+        customer.setBlockReason(reason);
+        userRepository.save(customer);
+    }
+
+    public void unblockCustomer(Long customerId) {
+        User customer = userRepository.findById(customerId)
+                .filter(user -> user.getRole() == Role.ROLE_CUSTOMER)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found"));
+        customer.setBlocked(false);
+        customer.setBlockReason(null);
+        userRepository.save(customer);
     }
 
     private String ensureCustomerId(User customer) {

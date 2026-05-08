@@ -38,8 +38,8 @@ public class AuthController {
     @PostConstruct
     public void seedUsers() {
         if (userRepository.count() == 0) {
-            userRepository.save(new User(null, "fmg", encoder.encode("fmg123"), "Bob FMG", "fmg@tpa.com", null, Role.ROLE_FMG));
-            userRepository.save(new User(null, "carrier", encoder.encode("carrier123"), "Carol Carrier", "carrier@tpa.com", null, Role.ROLE_CARRIER));
+            userRepository.save(new User(null, "fmg", encoder.encode("fmg123"), "Bob FMG", "fmg@tpa.com", null, Role.ROLE_FMG, false, null));
+            userRepository.save(new User(null, "carrier", encoder.encode("carrier123"), "Carol Carrier", "carrier@tpa.com", null, Role.ROLE_CARRIER, false, null));
         }
     }
 
@@ -51,6 +51,12 @@ public class AuthController {
         String jwt = jwtUtils.generateJwtToken(authentication);
 
         User user = userRepository.findByUsername(loginRequest.get("username")).orElseThrow();
+        if (user.isBlocked()) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "error", "Your account has been blocked.",
+                    "reason", user.getBlockReason() != null ? user.getBlockReason() : "No reason provided."
+            ));
+        }
 
         return ResponseEntity.ok(Map.of(
                 "token", jwt,
@@ -80,7 +86,7 @@ public class AuthController {
         }
 
         String customerId = customerIdService.generateUniqueCustomerId();
-        User user = new User(null, username, encoder.encode(password), name, email, customerId, Role.ROLE_CUSTOMER);
+        User user = new User(null, username, encoder.encode(password), name, email, customerId, Role.ROLE_CUSTOMER, false, null);
         userRepository.save(user);
 
         return ResponseEntity.ok(Map.of(

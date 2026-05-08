@@ -24,6 +24,8 @@ public class CustomerDetailsResponse {
     private int pendingClaims;
     private BigDecimal totalClaimedAmount;
     private BigDecimal totalSettledAmount;
+    private boolean isBlocked;
+    private String blockReason;
     private List<PolicyHistory> policies;
     private List<ClaimHistory> claims;
 

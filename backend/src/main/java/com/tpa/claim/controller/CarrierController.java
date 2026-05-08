@@ -62,6 +62,19 @@ public class CarrierController {
         return ResponseEntity.ok(customerDirectoryService.getCustomerDetails(id));
     }
 
+    @PutMapping("/customers/{id}/block")
+    public ResponseEntity<?> blockCustomer(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String reason = body.get("reason");
+        customerDirectoryService.blockCustomer(id, reason);
+        return ResponseEntity.ok(Map.of("message", "Customer blocked successfully"));
+    }
+
+    @PutMapping("/customers/{id}/unblock")
+    public ResponseEntity<?> unblockCustomer(@PathVariable Long id) {
+        customerDirectoryService.unblockCustomer(id);
+        return ResponseEntity.ok(Map.of("message", "Customer unblocked successfully"));
+    }
+
     // Approve payment → auto-completes
     @PutMapping("/claims/{id}/approve")
     public ResponseEntity<?> approveClaim(@PathVariable String id, @RequestBody Map<String, String> body) {

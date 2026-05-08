@@ -18,4 +18,6 @@ public class CustomerDirectoryResponse {
     private int inactivePolicies;
     private String status;
     private LocalDateTime lastPurchaseDate;
+    private boolean isBlocked;
+    private String blockReason;
 }

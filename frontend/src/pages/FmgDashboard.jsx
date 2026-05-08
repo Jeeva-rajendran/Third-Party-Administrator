@@ -17,6 +17,9 @@ function FmgDashboard() {
   const [customerDetailsLoading, setCustomerDetailsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [blockReason, setBlockReason] = useState('');
+  const [customerToBlock, setCustomerToBlock] = useState(null);
 
   const headers = { Authorization: `Bearer ${auth.token}` };
 
@@ -67,6 +70,29 @@ function FmgDashboard() {
       setCustomerDetailsOpen(false);
     } finally {
       setCustomerDetailsLoading(false);
+    }
+  };
+
+  const handleBlockCustomer = async () => {
+    if (!blockReason.trim()) return setError('Please provide a reason for blocking.');
+    try {
+      await axios.put(`${API}/fmg/customers/${customerToBlock.id}/block`, { reason: blockReason }, { headers });
+      setSuccess(`Customer ${customerToBlock.name} blocked successfully.`);
+      setBlockDialogOpen(false);
+      setBlockReason('');
+      fetchCustomers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to block customer.');
+    }
+  };
+
+  const unblockCustomer = async (customer) => {
+    try {
+      await axios.put(`${API}/fmg/customers/${customer.id}/unblock`, {}, { headers });
+      setSuccess(`Customer ${customer.name} unblocked successfully.`);
+      fetchCustomers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to unblock customer.');
     }
   };
 
@@ -219,13 +245,20 @@ function FmgDashboard() {
                     <TableCell>
                       <Chip
                         size="small"
-                        label={customer.status.replace('_', ' ')}
-                        color={customer.status === 'ACTIVE' ? 'success' : customer.status === 'INACTIVE' ? 'warning' : 'default'}
+                        label={customer.blocked ? 'BLOCKED' : customer.status.replace('_', ' ')}
+                        color={customer.blocked ? 'error' : (customer.status === 'ACTIVE' ? 'success' : customer.status === 'INACTIVE' ? 'warning' : 'default')}
                       />
                     </TableCell>
                     <TableCell>{customer.lastPurchaseDate ? new Date(customer.lastPurchaseDate).toLocaleString() : 'No policies yet'}</TableCell>
                     <TableCell>
-                      <Button size="small" variant="outlined" onClick={() => openCustomerDetails(customer)}>Details</Button>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button size="small" variant="outlined" onClick={() => openCustomerDetails(customer)}>Details</Button>
+                        {customer.blocked ? (
+                          <Button size="small" variant="contained" color="success" onClick={() => unblockCustomer(customer)}>Unblock</Button>
+                        ) : (
+                          <Button size="small" variant="contained" color="error" onClick={() => { setCustomerToBlock(customer); setBlockDialogOpen(true); }}>Block</Button>
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -325,6 +358,24 @@ function FmgDashboard() {
             </Box>
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Block Reason Dialog */}
+      <Dialog open={blockDialogOpen} onClose={() => setBlockDialogOpen(false)}>
+        <DialogTitle>Block Customer: {customerToBlock?.name}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>Please provide a reason for blocking this customer. They will see this reason when attempting to login.</Typography>
+          <textarea
+            style={{ width: '100%', minHeight: '100px', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontFamily: 'inherit' }}
+            placeholder="Enter reason for blocking..."
+            value={blockReason}
+            onChange={(e) => setBlockReason(e.target.value)}
+          />
+        </DialogContent>
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          <Button onClick={() => setBlockDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleBlockCustomer}>Block Customer</Button>
+        </Box>
       </Dialog>
     </Box>
   );
