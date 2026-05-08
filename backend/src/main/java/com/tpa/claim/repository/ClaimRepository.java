@@ -4,6 +4,7 @@ import com.tpa.claim.model.Claim;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.math.BigDecimal;
 import java.util.List;
 
 public interface ClaimRepository extends JpaRepository<Claim, String> {
@@ -25,4 +26,6 @@ public interface ClaimRepository extends JpaRepository<Claim, String> {
                                          @Param("patientName") String patientName,
                                          @Param("hospitalName") String hospitalName,
                                          @Param("admissionDate") java.time.LocalDate admissionDate);
+    @Query("SELECT SUM(c.settlementAmount) FROM Claim c WHERE c.customerPolicy.id = :policyId AND c.status IN ('CARRIER_APPROVED', 'COMPLETED')")
+    BigDecimal sumSettlementAmountByCustomerPolicyId(@Param("policyId") Long policyId);
 }

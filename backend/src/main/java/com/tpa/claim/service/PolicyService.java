@@ -11,10 +11,14 @@ public class PolicyService {
 
     private final PolicyRepository policyRepository;
     private final CustomerPolicyRepository customerPolicyRepository;
+    private final ClaimRepository claimRepository;
 
-    public PolicyService(PolicyRepository policyRepository, CustomerPolicyRepository customerPolicyRepository) {
+    public PolicyService(PolicyRepository policyRepository, 
+                        CustomerPolicyRepository customerPolicyRepository,
+                        ClaimRepository claimRepository) {
         this.policyRepository = policyRepository;
         this.customerPolicyRepository = customerPolicyRepository;
+        this.claimRepository = claimRepository;
     }
 
     // Carrier creates a policy
@@ -45,7 +49,14 @@ public class PolicyService {
     }
 
     public List<CustomerPolicy> getCustomerPolicies(Long customerId) {
-        return customerPolicyRepository.findByCustomerId(customerId);
+        List<CustomerPolicy> policies = customerPolicyRepository.findByCustomerId(customerId);
+        policies.forEach(this::calculateUtilization);
+        return policies;
+    }
+
+    private void calculateUtilization(CustomerPolicy cp) {
+        java.math.BigDecimal utilized = claimRepository.sumSettlementAmountByCustomerPolicyId(cp.getId());
+        cp.setUtilizedAmount(utilized != null ? utilized : java.math.BigDecimal.ZERO);
     }
 
     public List<CustomerPolicy> getCustomerPoliciesByStatus(String status) {
@@ -53,7 +64,9 @@ public class PolicyService {
     }
 
     public List<CustomerPolicy> getActiveCustomerPolicies(Long customerId) {
-        return customerPolicyRepository.findByCustomerIdAndStatus(customerId, "ACTIVE");
+        List<CustomerPolicy> policies = customerPolicyRepository.findByCustomerIdAndStatus(customerId, "ACTIVE");
+        policies.forEach(this::calculateUtilization);
+        return policies;
     }
 
     // Update existing policy

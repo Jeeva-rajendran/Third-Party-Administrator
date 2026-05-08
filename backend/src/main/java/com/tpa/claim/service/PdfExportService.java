@@ -24,7 +24,7 @@ public class PdfExportService {
         this.timelineService = timelineService;
     }
 
-    public byte[] generateClaimPdf(Claim claim) {
+    public byte[] generateClaimPdf(Claim claim, boolean includeRuleDetails) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         Document document = new Document(PageSize.A4);
 
@@ -86,7 +86,7 @@ public class PdfExportService {
             }
 
             // Rule Results
-            if (claim.getRuleResults() != null && !claim.getRuleResults().isEmpty()) {
+            if (includeRuleDetails && claim.getRuleResults() != null && !claim.getRuleResults().isEmpty()) {
                 document.add(new Paragraph("RULE ENGINE RESULTS", headerFont));
                 PdfPTable ruleTable = new PdfPTable(3);
                 ruleTable.setWidthPercentage(100);

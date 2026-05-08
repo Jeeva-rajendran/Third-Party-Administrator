@@ -41,6 +41,9 @@ public class CustomerPolicy {
     @Column(columnDefinition = "TEXT")
     private String remarks;
 
+    @Transient
+    private java.math.BigDecimal utilizedAmount;
+
     @PrePersist
     protected void onCreate() {
         this.purchaseDate = LocalDateTime.now();

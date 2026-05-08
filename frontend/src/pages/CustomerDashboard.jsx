@@ -2,8 +2,9 @@ import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../App';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Paper, Grid, Chip, Card, CardContent, CardActions, Alert, LinearProgress, Divider } from '@mui/material';
-import { Send, Policy, ShoppingCart, Assignment, VerifiedUser, CalendarMonth, Payments, HealthAndSafety, ReceiptLong } from '@mui/icons-material';
+import { Box, Typography, Button, Paper, Grid, Chip, Card, CardContent, CardActions, Alert, LinearProgress, Divider, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Send, Policy, ShoppingCart, Assignment, VerifiedUser, CalendarMonth, Payments, HealthAndSafety, ReceiptLong, Visibility, Download, History } from '@mui/icons-material';
+import ClaimTimeline from '../components/ClaimTimeline';
 
 const API = 'http://localhost:8080/api';
 
@@ -16,6 +17,8 @@ function CustomerDashboard() {
   const [tab, setTab] = useState('policies');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedClaimTimeline, setSelectedClaimTimeline] = useState(null);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const headers = { Authorization: `Bearer ${auth.token}` };
 
@@ -32,6 +35,22 @@ function CustomerDashboard() {
       setMyPolicies(myPolRes.data);
       setClaims(claimRes.data);
     } catch (err) { console.error(err); }
+  };
+
+  const fetchClaimTimeline = async (claimId) => {
+    try {
+      const res = await axios.get(`${API}/claims/${claimId}/timeline`, { headers });
+      setSelectedClaimTimeline(res.data);
+      setTimelineOpen(true);
+    } catch (err) { setError('Failed to load timeline'); }
+  };
+
+  const downloadClaimPdf = (claimId) => {
+    window.open(`${API}/claims/${claimId}/export?token=${auth.token}`, '_blank');
+  };
+
+  const viewDocument = (claimId, docType) => {
+    window.open(`${API}/claims/${claimId}/documents/${docType}?token=${auth.token}`, '_blank');
   };
 
   const purchasePolicy = async (policyId) => {
@@ -270,12 +289,31 @@ function CustomerDashboard() {
                   </Box>
                   <Grid container spacing={1.25}>
                     <Grid item xs={6}>
-                      <PolicyMetric icon={<VerifiedUser fontSize="small" />} label="Coverage" value={formatCurrency(cp.policy?.coverageAmount)} color="success.main" />
+                      <PolicyMetric icon={<VerifiedUser fontSize="small" />} label="Total Coverage" value={formatCurrency(cp.policy?.coverageAmount)} color="success.main" />
                     </Grid>
                     <Grid item xs={6}>
                       <PolicyMetric icon={<ReceiptLong fontSize="small" />} label="Purchased" value={cp.purchaseDate ? new Date(cp.purchaseDate).toLocaleDateString() : 'N/A'} color="primary.main" />
                     </Grid>
                   </Grid>
+
+                  {/* Coverage Utilization Gauge */}
+                  <Box sx={{ mt: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>Coverage Utilization</Typography>
+                      <Typography variant="caption" fontWeight={800} color="primary.main">
+                        {formatCurrency(cp.utilizedAmount)} / {formatCurrency(cp.policy?.coverageAmount)}
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={Math.min(100, (cp.utilizedAmount / cp.policy?.coverageAmount) * 100)} 
+                      sx={{ height: 8, borderRadius: 1, bgcolor: 'rgba(0,0,0,0.05)' }}
+                      color={(cp.utilizedAmount / cp.policy?.coverageAmount) > 0.8 ? 'error' : 'primary'}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Remaining: {formatCurrency(cp.policy?.coverageAmount - cp.utilizedAmount)}
+                    </Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -311,6 +349,10 @@ function CustomerDashboard() {
                       ₹{c.settlementAmount.toLocaleString()}
                     </Typography>
                   )}
+                  <Box sx={{ mt: 1, display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                    <Button size="small" variant="text" startIcon={<History />} onClick={(e) => { e.stopPropagation(); fetchClaimTimeline(c.id); }}>Track</Button>
+                    <Button size="small" variant="text" startIcon={<Download />} onClick={(e) => { e.stopPropagation(); downloadClaimPdf(c.id); }}>PDF</Button>
+                  </Box>
                 </Box>
               </Box>
             </Paper>
@@ -318,6 +360,16 @@ function CustomerDashboard() {
           {claims.length === 0 && <Typography color="text.secondary">No claims yet. Submit your first claim!</Typography>}
         </Box>
       )}
+      {/* Claim Timeline Dialog */}
+      <Dialog open={timelineOpen} onClose={() => setTimelineOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>Claim Progress Tracking</DialogTitle>
+        <DialogContent dividers>
+          <ClaimTimeline timeline={selectedClaimTimeline} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTimelineOpen(false)} sx={{ fontWeight: 700 }}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

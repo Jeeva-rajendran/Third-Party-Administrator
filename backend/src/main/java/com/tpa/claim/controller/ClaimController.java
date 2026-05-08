@@ -210,7 +210,12 @@ public class ClaimController {
         Claim claim = claimRepository.findById(id).orElse(null);
         if (claim == null) return ResponseEntity.notFound().build();
 
-        byte[] pdfBytes = pdfExportService.generateClaimPdf(claim);
+        // Check if user is a customer — hide rule engine details if they are
+        UserDetailsImpl userDetails = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        boolean isCustomer = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
+
+        byte[] pdfBytes = pdfExportService.generateClaimPdf(claim, !isCustomer);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData("filename", "claim_" + id + ".pdf");
