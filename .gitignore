@@ -1,0 +1,28 @@
+# Secrets & keys
+*.pem
+.env
+.env.*
+!.env.example
+
+# Dependencies & build output
+node_modules/
+frontend/dist/
+backend/target/
+
+# Runtime uploads
+uploads/
+
+# IDE & OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

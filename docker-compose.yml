@@ -1,0 +1,56 @@
+version: '3.8'
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: tpa_claims
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+
+
+  backend:
+    build: 
+      context: ./backend
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/tpa_claims?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=tpa_claims
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_ENABLED=${GEMINI_ENABLED:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./dummy_docs:/app/dummy_docs
+      - ./uploads:/app/uploads
+    restart: always
+
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3002:80"
+    depends_on:
+      - backend
+    restart: always
+
+
+volumes:
+  mysql_data:
